@@ -137,9 +137,7 @@ contract Carpediem is Ownable {
         require(block.timestamp < stakeTerm + stakeTs, 'stake matured');
         users[_token][sender].assignedReward += getReward(_token, sender);
         _buySharesForUser(_token, _amount, sender);
-        
         uint256 stakeDeposit = users[_token][sender].stake.amount;       
-        
         _boostSharesForUser(_token, sender, stakeTs + stakeTerm - block.timestamp, stakeDeposit + _amount);
         users[_token][sender].lastLambda = pools[_token].lambda;
         users[_token][sender].stake = StakeInfo(stakeDeposit + _amount, stakeTs + stakeTerm - block.timestamp, block.timestamp);
@@ -179,29 +177,15 @@ contract Carpediem is Ownable {
 
     function _boostSharesForUser(
         address _token, 
-        // uint256 _newShares, 
         address _user, 
         uint256 _term, 
         uint256 _deposit
         ) internal {
         uint256 sharesBoostedBefore = users[_token][_user].sharesWithBonuses;
         uint256 shares = users[_token][_user].shares;
-        // if (sharesBoostedBefore != 0) {
-        //     uint256 userShares = users[_token][_user].shares;
-        //     console.log('_boostSharesForUser: _newShares = ', _newShares);
-        //     _newShares += userShares;
-        //     console.log('_boostSharesForUser: userShares = ', userShares);
-        // } 
-
         uint256 sharesBoosted = shares +
             _getBonusB(_token, shares, _deposit) +
             _getBonusL(_token, shares, _term);
-        
-        console.log('_boostSharesForUser: shares = ', shares);
-        console.log('_boostSharesForUser: _term = ', _term);
-        console.log('_boostSharesForUser: _deposit = ', _deposit);
-        console.log('_boostSharesForUser: _getBonusB = ', _getBonusB(_token, shares, _deposit));
-        console.log('_boostSharesForUser: _getBonusL = ', _getBonusL(_token, shares, _term));
         users[_token][_user].sharesWithBonuses = sharesBoosted;
         pools[_token].totalShares += sharesBoosted - sharesBoostedBefore;
     }
@@ -209,14 +193,12 @@ contract Carpediem is Ownable {
     function _getBonusB(address _token, uint256 _shares, uint256 _deposit) internal view returns(uint256){
         uint256 bBonus = pools[_token].bBonusAmount;
         if(_deposit < bBonus) return _shares * uint256(bBonusMaxPercent) * _deposit / (bBonus * uint256(percentBase)); 
-        
         return uint256(bBonusMaxPercent) * _shares / uint256(percentBase);
     }
 
     function _getBonusL(address _token, uint256 _shares, uint256 _term) internal view returns(uint256){
         uint256 lBonus = pools[_token].lBonusPeriod;
         if(_term < lBonus) return _shares * uint256(lBonusMaxPercent) * _term / (lBonus * uint256(percentBase)); 
-        
         return uint256(lBonusMaxPercent) * _shares / uint256(percentBase);
     }
 
@@ -224,8 +206,7 @@ contract Carpediem is Ownable {
         uint256 term =  users[_token][_user].stake.term;
         uint256 stakeTs =  users[_token][_user].stake.ts;
         if(stakeTs + term <= block.timestamp) return 0;
-        return (_income) * (term - (block.timestamp - stakeTs )) / (term);
-
+        return _income * (term - (block.timestamp - stakeTs )) / (term);
     }
 
     function _distributePenalty(address _token, address _user, uint256 _penalty) internal {
@@ -246,7 +227,6 @@ contract Carpediem is Ownable {
             pools[_token].currentPrice = newPrice;
             emit NewPrice(oldPrice, newPrice);
         } 
-        // event
     }
 
 
