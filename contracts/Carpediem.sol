@@ -52,6 +52,9 @@ contract Carpediem is Ownable {
 
     uint16 constant percentBase = 100;
     uint256 constant MULTIPLIER = 1e18;
+    uint256 constant WEEK = 7 * 86400;
+    uint256 constant FREE_LATE_PERIOD = WEEK;
+    uint256 constant PENALTY_PERCENT_PER_WEEK = 2;
 
     address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
 
@@ -149,12 +152,13 @@ contract Carpediem is Ownable {
         require(_token != address(0), 'token cannot be zero');
         require(pools[_token].token == _token, 'pool doesnt exist');
         uint256 deposit = users[_token][sender].stake.amount;
-        uint256 income = deposit + getReward(_token, sender);
-        uint256 penalty = _getPenalty(_token, sender, income);
-        _changeSharesPrice(_token, sender, income - penalty);
+        uint256 reward = getReward(_token, sender);
+        // uint256 income = deposit + ;
+        uint256 penalty = _getPenalty(_token, sender, deposit, reward);
+        _changeSharesPrice(_token, sender, deposit + reward - penalty);
         _distributePenalty(_token, sender, penalty);
         delete users[_token][sender];
-        IERC20(_token).transfer(sender, income - penalty);
+        IERC20(_token).transfer(sender, deposit + reward - penalty);
 
     }
 
@@ -202,11 +206,17 @@ contract Carpediem is Ownable {
         return uint256(lBonusMaxPercent) * _shares / uint256(percentBase);
     }
 
-    function _getPenalty(address _token, address _user, uint256 _income) internal view returns(uint256){
+    function _getPenalty(address _token, address _user, uint256 _deposit, uint256 _reward) internal view returns(uint256){
         uint256 term =  users[_token][_user].stake.term;
         uint256 stakeTs =  users[_token][_user].stake.ts;
-        if(stakeTs + term <= block.timestamp) return 0;
-        return _income * (term - (block.timestamp - stakeTs )) / (term);
+        if(stakeTs + term <= block.timestamp) {
+            if(stakeTs + term + FREE_LATE_PERIOD > block.timestamp) return 0;
+            uint256 lateWeeks = (block.timestamp - (stakeTs + term ))/ WEEK;      
+            if (lateWeeks > 50) return _deposit;
+            uint256 latePenalty = _reward * PENALTY_PERCENT_PER_WEEK * lateWeeks / percentBase;
+            return latePenalty;
+        }   
+        return (_deposit + _reward) * (term - (block.timestamp - stakeTs )) / (term);
     }
 
     function _distributePenalty(address _token, address _user, uint256 _penalty) internal {

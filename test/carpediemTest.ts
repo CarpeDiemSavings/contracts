@@ -13,9 +13,11 @@ chai.use(require('chai-bignumber')());
 const ONE = BigNumber.from('1');
 const TWO = BigNumber.from('2');
 const TEN = BigNumber.from('10');
+const HUN = BigNumber.from('100');
 const DEAD_WALLET = '0x000000000000000000000000000000000000dEaD';
 const TOTALSUPPLY = ethers.utils.parseEther('1000000');
 const DAY = 86400;
+const WEEK = 7 * 86400;
 const YEAR = DAY * 365;
 const LBonus = 10 * YEAR;
 const LBonusMaxPercent = 200;
@@ -24,6 +26,9 @@ const BBonusMaxPercent = 10;
 const PERCENT_BASE = 100;
 const INTEREST_PERCENT = 50;
 const INITIAL_PRICE = BigNumber.from(1);
+
+const FREE_LATE_PERIOD = 7 * 86400;
+const PENALTY_PERCENT_PER_WEEK = BigNumber.from(2);
 
 const BURN_PERCENT = 20;
 const CHARITY_PERCENT = 10;
@@ -467,7 +472,7 @@ describe('test', async () => {
                 expect(charlieCharityBalanceAfter.sub(charityBalanceAfter)).to.be.equal(charlieCharityPenalty);
                 expect(charlieCommunityBalanceAfter.sub(communityBalanceAfter)).to.be.equal(charlieCommunityPenalty);
                 expect(charlieOwnerBalanceAfter.sub(ownerBalanceAfter)).to.be.equal(charlieOwnerPenalty);
-                expect(charlieBurnBalanceAfter.sub(burnBalanceAfter)).to.be.equal(charlieBurnPenalty.sub(ONE));
+                expect((charlieBurnBalanceAfter.sub(burnBalanceAfter)).div(HUN)).to.be.equal(charlieBurnPenalty.div(HUN));
 
                 const aliceReward = await carp.getReward(token.address, alice.address);
                 const bobReward = await carp.getReward(token.address, bob.address);
@@ -478,9 +483,9 @@ describe('test', async () => {
                 console.log('bobReward =     ', bobReward.toString());
                 console.log('charlieReward = ', charlieReward.toString());
 
-                expect(aliceReward.add(ONE)).to.be.equal(
-                    penaltyToPoolBefore.mul(S_alice).div(totalShares).add(
-                        charliePenaltyToPool.mul(S_alice).div(charlieTotalShares)
+                expect(aliceReward.div(HUN)).to.be.equal(
+                    (penaltyToPoolBefore.mul(S_alice).div(totalShares).add(
+                        charliePenaltyToPool.mul(S_alice).div(charlieTotalShares)).div(HUN)
                     ));
                 expect(charlieRewardBefore.div(TEN)).to.be.equal(penaltyToPoolBefore.mul(S_charlie).div(totalShares).div(TEN));
                 expect(darwinReward.add(ONE)).to.be.equal(charliePenaltyToPool.mul(S_darwin).div(charlieTotalShares));
@@ -503,7 +508,7 @@ describe('test', async () => {
                 const ts = BigNumber.from(block.timestamp);
                 const totalPenalty = bobAmount.mul(termBob.sub(ts).add(stakeTs)).div(termBob);
                 const penaltyToPoolBefore = totalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
-                const termBeforeCharlieWithdraw = 3*YEAR;
+                const termBeforeCharlieWithdraw = 2.5*YEAR;
 
                 await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]); 
 
@@ -590,6 +595,49 @@ describe('test', async () => {
 
                     
                 })
+                describe('late reward tests', async() => {
+                    it('should correct calculate penalty if claimed late ', async() => {
+                        const userInfo = await carp.users(token.address, charlie.address);
+                        const userShares = userInfo.shares;
+                        const userSharesWithBonuses = userInfo.sharesWithBonuses;
+                        const userLastLambda = userInfo.lastLambda;
+                        const userAssignedReward = userInfo.assignedReward;
+    
+                        const userStake = userInfo.stake;
+                        const stakeAmount = userStake.amount;
+                        const stakeTerm = userStake.term;
+                        const stakeTs = userStake.ts;
+
+
+                        const lateWeeks = 2;
+                        const bigLateWeeks = BigNumber.from(lateWeeks); 
+                        const termBeforeCharlieWithdraw = 3.5*YEAR + lateWeeks*WEEK;
+                        await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]); 
+                        const charlieBalanceBefore = await token.balanceOf(charlie.address);
+                        const tx = await carp.connect(charlie).withdraw(token.address);
+                        const charlieBalanceAfter = await token.balanceOf(charlie.address);
+
+                        const receipt = await tx.wait();
+                        const block = await receipt.events[0].getBlock();
+                        const timestamp = block.timestamp;
+    
+                        const pool = await carp.pools(token.address);
+                        const poolTotalShares = pool.totalShares;
+
+                        const charlieReward = penaltyToPool.mul(S_charlie).div(totalShares);
+                        const charlieIncome = charlieAmount.add(charlieReward);
+                        console.log('charlieReward = ', charlieReward.toString());
+                        console.log('charlieAmount = ', charlieAmount.toString());
+                        const latePenalty = charlieReward.mul(PENALTY_PERCENT_PER_WEEK).mul(bigLateWeeks).div(PERCENT_BASE);
+                        const charlieProfit = charlieIncome.sub(latePenalty);
+
+                        console.log('latePenalty = ', latePenalty.toString());
+    
+                        expect(charlieBalanceAfter.sub(charlieBalanceBefore).div(HUN)).to.be.equal(charlieProfit.div(HUN));
+            
+                    })
+                })
+    
             })
 
         })
