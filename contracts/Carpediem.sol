@@ -121,8 +121,8 @@ contract Carpediem is Ownable {
             token: _token,
             lambda: 0,
             totalShares: 0,
-            currentPrice: _initialPrice * MULTIPLIER,
-            initialPrice: _initialPrice * MULTIPLIER,
+            currentPrice: _initialPrice,
+            initialPrice: _initialPrice,
             bBonusAmount: _bBonusAmount,
             lBonusPeriod: _lBonusPeriod
         });
@@ -186,7 +186,7 @@ contract Carpediem is Ownable {
         uint256 reward = users[_token][_user].assignedReward;
         uint256 lambda = pools[_token].lambda;
         if (lambda - lastLambda > 0) {
-            reward += (lambda - lastLambda) * users[_token][_user].sharesWithBonuses / MULTIPLIER;
+            reward += (lambda - lastLambda) * users[_token][_user].sharesWithBonuses / (MULTIPLIER * MULTIPLIER);
         }
         return reward;
     }
@@ -196,7 +196,7 @@ contract Carpediem is Ownable {
     function _buySharesForUser(address _token, uint256 _amount, address _user) internal {
         IERC20(_token).transferFrom(_user, address(this), _amount);                         // take tokens
         uint256 sharesToBuy = _amount * MULTIPLIER / pools[_token].currentPrice;              // calculate corresponding amount of shares
-        users[_token][_user].shares += sharesToBuy;                                           
+        users[_token][_user].shares += sharesToBuy * MULTIPLIER;                                           
     }
 
     // boost user shares for both deposit and extraDeposit
@@ -246,17 +246,16 @@ contract Carpediem is Ownable {
         IERC20(_token).transfer(communityWallet, _penalty * uint256(communityPercent) / uint256(percentBase));
         IERC20(_token).transfer(owner(), _penalty * uint256(ownerPercent) / uint256(percentBase));
         pools[_token].totalShares -= users[_token][_user].sharesWithBonuses;
-        pools[_token].lambda += _penalty * MULTIPLIER * uint256(interestPercent) / (uint256(percentBase) * pools[_token].totalShares);
+        pools[_token].lambda += _penalty * MULTIPLIER * MULTIPLIER * uint256(interestPercent) / (uint256(percentBase) * pools[_token].totalShares);
     }
 
     function _changeSharesPrice(address _token, address _user, uint256 _profit) private {
         uint256 oldPrice = pools[_token].currentPrice;
         uint256 userShares = users[_token][_user].shares;
-        if (_profit > oldPrice * userShares / MULTIPLIER) {     // equivalent to _profit / shares > oldPrice
-            uint256 newPrice = _profit * MULTIPLIER / userShares;
+        if (_profit > oldPrice * userShares / (MULTIPLIER * MULTIPLIER) ) {     // equivalent to _profit / shares > oldPrice
+            uint256 newPrice = _profit * MULTIPLIER * MULTIPLIER / userShares;
             pools[_token].currentPrice = newPrice;
             emit NewPrice(oldPrice, newPrice);
-            console.log('new price EMITTED');
         } 
     }
 
