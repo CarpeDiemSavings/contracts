@@ -28,35 +28,35 @@ contract Carpediem is Ownable {
 
     struct PoolInfo {
         address token;
-        uint256 lambda;
-        uint256 totalShares;
-        uint256 currentPrice;
-        uint256 initialPrice;
-        uint256 bBonusAmount;
-        uint256 lBonusPeriod;
+        uint256 lambda;                 
+        uint256 totalShares;                        // total shares with the bonuses in the pool
+        uint256 currentPrice;                       // current shares price
+        uint256 initialPrice;                       // initial shares price
+        uint256 bBonusAmount;                       // B0 in 0.1*B/B0 formula
+        uint256 lBonusPeriod;                       // L0 in 2*L/L0 formula
     }
 
-    uint256 public numberOfPools;
-    address public immutable charityWallet;
-    address public immutable communityWallet;
-    address public immutable ownerWallet;
+    uint256 public numberOfPools;                   // number of existing pools
+    address public immutable charityWallet;         // charity wallet address
+    address public immutable communityWallet;       // community wallet address
+    address public immutable ownerWallet;           // owner's wallet address (can differ from deployer address)
 
-    uint16 constant interestPercent = 50;
-    uint16 constant burnPercent = 20;
-    uint16 constant charityPercent = 10;
-    uint16 constant communityPercent = 10;
-    uint16 constant ownerPercent = 10;
+    uint16 constant interestPercent = 50;           // penalty percent to reward pool
+    uint16 constant burnPercent = 20;               // penalty percent to dead wallet
+    uint16 constant charityPercent = 10;            // penalty percent to charity wallet
+    uint16 constant communityPercent = 10;          // penalty percent to community wallet
+    uint16 constant ownerPercent = 10;              // penalty percent to owner wallet
 
-    uint16 constant bBonusMaxPercent = 10;
-    uint16 constant lBonusMaxPercent = 200;
+    uint16 constant bBonusMaxPercent = 10;          // maximum value of Bbonus
+    uint16 constant lBonusMaxPercent = 200;         // maximum value of Lbonus
 
-    uint16 constant percentBase = 100;
-    uint256 constant MULTIPLIER = 1e18;
+    uint16 constant percentBase = 100;              
+    uint256 constant MULTIPLIER = 1e18;             // used for multiplying numerators in lambda and price calculations
     uint256 constant WEEK = 7 * 86400;
-    uint256 constant FREE_LATE_PERIOD = WEEK;
-    uint256 constant PENALTY_PERCENT_PER_WEEK = 2;
+    uint256 constant FREE_LATE_PERIOD = WEEK;       // period of free claiming after stake matured
+    uint256 constant PENALTY_PERCENT_PER_WEEK = 2;  // amount of percents applied to reward every week
 
-    address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
+    address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;  // address forr burning
 
     event NewPool(
         address token,
@@ -70,6 +70,21 @@ contract Carpediem is Ownable {
         address depositor,
         uint256 amount,
         uint256 term
+    );
+
+    event ExtraDeposit(
+        address token,
+        address depositor,
+        uint256 amount,
+        uint256 term
+    );
+
+    event Withdraw(
+        address token,
+        address who,
+        uint256 deposit,
+        uint256 reward,
+        uint256 penalty
     );
 
     event NewPrice(
@@ -117,11 +132,10 @@ contract Carpediem is Ownable {
     
     function deposit(address _token, uint256 _amount, uint256 _term) external {
         address sender = _msgSender();
-        require(_token != address(0), 'token cannot be zero');
         require(pools[_token].token == _token, 'pool doesnt exist');
-        require(users[_token][sender].stake.amount == 0, 'stake already made');
         require(_amount > 0, 'deposit cannot be zero');
         require(_term > 0, 'term cannot be zero');
+        require(users[_token][sender].stake.amount == 0, 'stake already made');
         _buySharesForUser(_token, _amount, sender);
         _boostSharesForUser(_token, sender, _term, _amount);
         users[_token][sender].lastLambda = pools[_token].lambda;
@@ -131,7 +145,6 @@ contract Carpediem is Ownable {
 
     function extraDeposit(address _token, uint256 _amount) external {
         address sender = _msgSender();
-        require(_token != address(0), 'token cannot be zero');
         require(pools[_token].token == _token, 'pool doesnt exist');
         require(_amount > 0, 'deposit cannot be zero');
         require(users[_token][sender].stake.amount != 0, 'no stake yet');
@@ -139,28 +152,34 @@ contract Carpediem is Ownable {
         uint256 stakeTs = users[_token][sender].stake.ts;  
         require(block.timestamp < stakeTerm + stakeTs, 'stake matured');
         users[_token][sender].assignedReward += getReward(_token, sender);
-        _buySharesForUser(_token, _amount, sender);
         uint256 stakeDeposit = users[_token][sender].stake.amount;       
+        _buySharesForUser(_token, _amount, sender);
         _boostSharesForUser(_token, sender, stakeTs + stakeTerm - block.timestamp, stakeDeposit + _amount);
         users[_token][sender].lastLambda = pools[_token].lambda;
         users[_token][sender].stake = StakeInfo(stakeDeposit + _amount, stakeTs + stakeTerm - block.timestamp, block.timestamp);
-
+        emit ExtraDeposit(_token, sender, _amount, stakeTs + stakeTerm - block.timestamp);
     }
 
     function withdraw(address _token) external {
         address sender = _msgSender();
-        require(_token != address(0), 'token cannot be zero');
         require(pools[_token].token == _token, 'pool doesnt exist');
         uint256 deposit = users[_token][sender].stake.amount;
         uint256 reward = getReward(_token, sender);
-        // uint256 income = deposit + ;
         uint256 penalty = _getPenalty(_token, sender, deposit, reward);
         _changeSharesPrice(_token, sender, deposit + reward - penalty);
         _distributePenalty(_token, sender, penalty);
         delete users[_token][sender];
         IERC20(_token).transfer(sender, deposit + reward - penalty);
+        emit Withdraw(_token, sender, deposit, reward, penalty);
 
     }
+
+    function getPenalty(address _token, address _user) external view returns(uint256) {
+        uint256 deposit = users[_token][_user].stake.amount;
+        uint256 reward = getReward(_token, _user);
+        return _getPenalty(_token, _user, deposit, reward);
+    }
+
 
      function getReward(address _token, address _user) public view returns(uint256){
         uint256 lastLambda = users[_token][_user].lastLambda;
@@ -172,13 +191,15 @@ contract Carpediem is Ownable {
         return reward;
     }
 
-    function _buySharesForUser(address _token, uint256 _amount, address _user) internal returns(uint256) {
-        IERC20(_token).transferFrom(_user, address(this), _amount);
-        uint256 sharesToBuy = _amount * MULTIPLIER / pools[_token].currentPrice;
-        users[_token][_user].shares += sharesToBuy;
-        return sharesToBuy;
+
+    //// buys shares for user for current share price
+    function _buySharesForUser(address _token, uint256 _amount, address _user) internal {
+        IERC20(_token).transferFrom(_user, address(this), _amount);                         // take tokens
+        uint256 sharesToBuy = _amount * MULTIPLIER / pools[_token].currentPrice;              // calculate corresponding amount of shares
+        users[_token][_user].shares += sharesToBuy;                                           
     }
 
+    // boost user shares for both deposit and extraDeposit
     function _boostSharesForUser(
         address _token, 
         address _user, 
@@ -212,11 +233,11 @@ contract Carpediem is Ownable {
         if(stakeTs + term <= block.timestamp) {
             if(stakeTs + term + FREE_LATE_PERIOD > block.timestamp) return 0;
             uint256 lateWeeks = (block.timestamp - (stakeTs + term ))/ WEEK;      
-            if (lateWeeks > 50) return _deposit;
+            if (lateWeeks >= 50) return _reward;
             uint256 latePenalty = _reward * PENALTY_PERCENT_PER_WEEK * lateWeeks / percentBase;
             return latePenalty;
         }   
-        return (_deposit + _reward) * (term - (block.timestamp - stakeTs )) / (term);
+        return (_deposit + _reward) * (term - (block.timestamp - stakeTs) ) / term;
     }
 
     function _distributePenalty(address _token, address _user, uint256 _penalty) internal {
@@ -224,18 +245,18 @@ contract Carpediem is Ownable {
         IERC20(_token).transfer(charityWallet, _penalty * uint256(charityPercent) / uint256(percentBase));
         IERC20(_token).transfer(communityWallet, _penalty * uint256(communityPercent) / uint256(percentBase));
         IERC20(_token).transfer(owner(), _penalty * uint256(ownerPercent) / uint256(percentBase));
-        uint256 shares = users[_token][_user].sharesWithBonuses;
-        pools[_token].totalShares -= shares;
-        pools[_token].lambda += _penalty * MULTIPLIER * uint256(interestPercent) / uint256(percentBase) / pools[_token].totalShares;
+        pools[_token].totalShares -= users[_token][_user].sharesWithBonuses;
+        pools[_token].lambda += _penalty * MULTIPLIER * uint256(interestPercent) / (uint256(percentBase) * pools[_token].totalShares);
     }
 
-    function _changeSharesPrice(address _token, address _user, uint256 _profit) internal {
+    function _changeSharesPrice(address _token, address _user, uint256 _profit) private {
         uint256 oldPrice = pools[_token].currentPrice;
         uint256 userShares = users[_token][_user].shares;
-        if (_profit > oldPrice * userShares / MULTIPLIER) { // _profit / shares > oldPrice
+        if (_profit > oldPrice * userShares / MULTIPLIER) {     // equivalent to _profit / shares > oldPrice
             uint256 newPrice = _profit * MULTIPLIER / userShares;
             pools[_token].currentPrice = newPrice;
             emit NewPrice(oldPrice, newPrice);
+            console.log('new price EMITTED');
         } 
     }
 

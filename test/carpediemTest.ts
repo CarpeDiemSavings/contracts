@@ -14,7 +14,8 @@ const ONE = BigNumber.from('1');
 const TWO = BigNumber.from('2');
 const TEN = BigNumber.from('10');
 const HUN = BigNumber.from('100');
-const DEAD_WALLET = '0x000000000000000000000000000000000000dEaD';
+const DEAD_WALLET =  '0x000000000000000000000000000000000000dEaD';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const TOTALSUPPLY = ethers.utils.parseEther('1000000');
 const DAY = 86400;
 const WEEK = 7 * 86400;
@@ -53,6 +54,8 @@ function calculateLBonus(shares: any, term: any) {
 }
 
 
+
+
 describe('test', async () => {
     const accounts = waffle.provider.getWallets()
     const owner = accounts[0];
@@ -62,6 +65,31 @@ describe('test', async () => {
     const bob = accounts[4];
     const charlie = accounts[5];
     const darwin = accounts[6];
+    const other = accounts[7];
+
+    describe('incorrect deployment', async () => {
+        it('shouldnt deploy if charityWallet = 0', async() => {
+            const Token = await ethers.getContractFactory('Token');
+            const Carpediem = await ethers.getContractFactory('Carpediem');
+            token = await Token.deploy(TOTALSUPPLY);
+            await expect(Carpediem.deploy(ZERO_ADDRESS, community.address, owner.address)).to.be.revertedWith('charityWallet cannot be zero');
+        })
+        it('shouldnt deploy if communityWallet = 0', async() => {
+            const Token = await ethers.getContractFactory('Token');
+            const Carpediem = await ethers.getContractFactory('Carpediem');
+            token = await Token.deploy(TOTALSUPPLY);
+            await expect(Carpediem.deploy(charity.address, ZERO_ADDRESS, owner.address)).to.be.revertedWith('communityWallet cannot be zero');
+        })
+        it('shouldnt deploy if ownerWallet = 0', async() => {
+            const Token = await ethers.getContractFactory('Token');
+            const Carpediem = await ethers.getContractFactory('Carpediem');
+            token = await Token.deploy(TOTALSUPPLY);
+            await expect(Carpediem.deploy(charity.address, community.address, ZERO_ADDRESS)).to.be.revertedWith('ownerWallet cannot be zero');
+        })
+
+
+    })
+
     beforeEach('deployment', async() => {
         const Token = await ethers.getContractFactory('Token');
         const Carpediem = await ethers.getContractFactory('Carpediem');
@@ -81,7 +109,24 @@ describe('test', async () => {
         expect(ownerWallet).to.be.equal(owner.address);
     })
 
-    it('should correctly create poll', async() => {
+    it('shouldnt create pool with zero token address', async() => {
+        await expect(carp.createPool(ZERO_ADDRESS, INITIAL_PRICE, BBonus, LBonus)).to.be.revertedWith('token cannot be zero');
+    })
+    it('shouldnt create pool with zero initial share price', async() => {
+        await expect(carp.createPool(token.address, 0, BBonus, LBonus)).to.be.revertedWith('price cannot be zero');
+    })
+    it('shouldnt create pool with zero initial share price', async() => {
+        await expect(carp.createPool(token.address, INITIAL_PRICE, 0, LBonus)).to.be.revertedWith('B bonus amount cannot be zero');
+    })
+    it('shouldnt create pool with zero initial share price', async() => {
+        await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, 0)).to.be.revertedWith('L bonus period cannot be zero');
+    })
+    it('shouldnt create pool if pool with this token already exists', async() => {
+        await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
+        await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus)).to.be.revertedWith('pool already exists');
+    })
+
+    it('should correctly create pool', async() => {
         const tx = await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
         const receipt = await tx.wait();
         const numberOfPools = await carp.numberOfPools();
@@ -120,6 +165,35 @@ describe('test', async () => {
         beforeEach('create pool', async() => {
             await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
         })
+
+        it('shouldnt deposit if pool doesnt exist (wrong address)', async() => {
+            const aliceAmount = ethers.utils.parseEther('1');
+            const termAlice = YEAR;
+            await token.connect(alice).approve(carp.address, aliceAmount);
+            await expect(carp.connect(alice).deposit(other.address, aliceAmount, termAlice)).to.be.revertedWith('pool doesnt exist');
+        })
+
+        it('shouldnt deposit if already deposited', async() => {
+            const aliceAmount = ethers.utils.parseEther('1');
+            const termAlice = YEAR;
+            await token.connect(alice).approve(carp.address, aliceAmount);
+            await carp.connect(alice).deposit(token.address, aliceAmount, termAlice);
+            await expect(carp.connect(alice).deposit(token.address, aliceAmount, termAlice)).to.be.revertedWith('stake already made');
+        })
+        it('shouldnt deposit if amount is zero', async() => {
+            const aliceAmount = ethers.utils.parseEther('1');
+            const termAlice = YEAR;
+            await token.connect(alice).approve(carp.address, aliceAmount);
+            await expect(carp.connect(alice).deposit(token.address, 0, termAlice)).to.be.revertedWith('deposit cannot be zero');
+        })
+
+        it('shouldnt deposit if term is zero', async() => {
+            const aliceAmount = ethers.utils.parseEther('1');
+            const termAlice = YEAR;
+            await token.connect(alice).approve(carp.address, aliceAmount);
+            await expect(carp.connect(alice).deposit(token.address, aliceAmount, 0)).to.be.revertedWith('term cannot be zero');
+        })
+
         it('should correct deposit', async() => {
             const aliceAmount = ethers.utils.parseEther('1');
             const termAlice = YEAR;
@@ -141,11 +215,15 @@ describe('test', async () => {
             const poolCurrentPrice = pool.currentPrice;
             const poolInitialPrice = pool.initialPrice;
 
+            const eventName = receipt.events[2].event;
+            const eventToken = receipt.events[2].args.token;
+            const eventDepositor = receipt.events[2].args.depositor;
+            const eventAmount = receipt.events[2].args.amount;
+            const eventTerm = receipt.events[2].args.term;
+    
+
             const s_alice = aliceAmount.div(INITIAL_PRICE);
             const S_alice = s_alice.add(calculateBBonus(s_alice, aliceAmount)).add(calculateLBonus(s_alice, termAlice));
-            console.log(S_alice.toString());
-            console.log(calculateBBonus(s_alice, aliceAmount).toString());
-            console.log(calculateLBonus(s_alice, termAlice).toString());
             expect(shares).to.be.equal(s_alice);
             expect(amount).to.be.equal(aliceAmount);
             expect(sharesWithBonuses).to.be.equal(S_alice);
@@ -157,6 +235,12 @@ describe('test', async () => {
             expect(poolTotalShares).to.be.equal(S_alice);
             expect(poolCurrentPrice).to.be.equal(INITIAL_PRICE.mul(LAMBDA_COEF));
             expect(poolInitialPrice).to.be.equal(INITIAL_PRICE.mul(LAMBDA_COEF));
+
+            expect(eventName).to.be.equal('Deposit');
+            expect(eventToken).to.be.equal(token.address);
+            expect(eventDepositor).to.be.equal(alice.address);
+            expect(eventAmount).to.be.equal(aliceAmount);
+            expect(eventTerm).to.be.equal(termAlice);
 
         })
 
@@ -188,15 +272,17 @@ describe('test', async () => {
             const S_bob = s_bob.add(calculateBBonus(s_bob, bobAmount)).add(calculateLBonus(s_bob, termBob));
             const S_charlie = s_charlie.add(calculateBBonus(s_charlie, charlieAmount)).add(calculateLBonus(s_charlie, termCharlie));
             
-            console.log("S_alice:   ", S_alice.toString());
-            console.log("S_bob:     ", S_bob.toString());
-            console.log("S_charlie: ", S_charlie.toString());
-
             expect(poolLambda).to.be.equal(0);
             expect(poolTotalShares).to.be.equal(S_alice.add(S_bob).add(S_charlie));
             expect(poolCurrentPrice).to.be.equal(INITIAL_PRICE.mul(LAMBDA_COEF));
             expect(poolInitialPrice).to.be.equal(INITIAL_PRICE.mul(LAMBDA_COEF));
 
+        })
+        it('shouldnt extraDeposit if there is no stake yet', async() => {
+            const termBeforeAliceExtra = 0.1*YEAR;
+            await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+            const extraAmount = ethers.utils.parseEther('10');
+            await expect(carp.connect(alice).extraDeposit(token.address, extraAmount)).to.be.revertedWith('no stake yet');
         })
 
         describe('withdraw tests', async() => {
@@ -256,8 +342,13 @@ describe('test', async () => {
                 const poolTotalShares = pool.totalShares;
                 const poolCurrentPrice = pool.currentPrice;
                 const poolInitialPrice = pool.initialPrice;
-
-                console.log('poolLambda BEFORE = ', poolLambda.toString())
+                
+                const eventName = receipt.events[receipt.events.length - 1].event;
+                const eventToken = receipt.events[receipt.events.length - 1].args.token;
+                const eventWho = receipt.events[receipt.events.length - 1].args.who;
+                const eventDeposit = receipt.events[receipt.events.length - 1].args.deposit;
+                const eventReward = receipt.events[receipt.events.length - 1].args.reward;
+                const eventPenalty = receipt.events[receipt.events.length - 1].args.penalty;
 
                 let charityBalanceAfter = await token.balanceOf(charity.address);
                 let communityBalanceAfter = await token.balanceOf(community.address);
@@ -281,13 +372,16 @@ describe('test', async () => {
                 const bobReward = await carp.getReward(token.address, bob.address);
                 const charlieReward = await carp.getReward(token.address, charlie.address);
 
-                console.log('aliceReward =   ', aliceReward.toString());
-                console.log('bobReward =     ', bobReward.toString());
-                console.log('charlieReward = ', charlieReward.toString());
-
                 expect(aliceReward.div(TEN)).to.be.equal(penaltyToPool.mul(S_alice).div(totalShares).div(TEN));
                 expect(charlieReward.div(TEN)).to.be.equal(penaltyToPool.mul(S_charlie).div(totalShares).div(TEN));
                 expect(bobReward.div(TEN)).to.be.equal(0); 
+
+                expect(eventName).to.be.equal('Withdraw');
+                expect(eventToken).to.be.equal(token.address);
+                expect(eventWho).to.be.equal(bob.address);
+                expect(eventDeposit).to.be.equal(bobAmount);
+                expect(eventReward).to.be.equal(0);
+                expect(eventPenalty).to.be.equal(totalPenalty);
 
             })
 
@@ -310,12 +404,6 @@ describe('test', async () => {
                 const bobBalanceAfter = await token.balanceOf(bob.address);
                 const block = await receipt.events[0].getBlock();
                 const ts = BigNumber.from(block.timestamp);
-                const totalPenalty = bobAmount.mul(termBob.sub(ts).add(stakeTs)).div(termBob);
-                const charityPenalty = totalPenalty.mul(CHARITY_PERCENT).div(PERCENT_BASE);
-                const communityPenalty = totalPenalty.mul(COMMUNITY_PERCENT).div(PERCENT_BASE);
-                const ownerPenalty = totalPenalty.mul(OWNER_PERCENT).div(PERCENT_BASE);
-                const burnPenalty = totalPenalty.mul(BURN_PERCENT).div(PERCENT_BASE);
-                const penaltyToPool = totalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
 
                 const pool = await carp.pools(token.address);
                 const poolLambda = pool.lambda;
@@ -429,14 +517,6 @@ describe('test', async () => {
                 const charlieBlock = await charlieReceipt.events[0].getBlock();
                 const charlieTs = BigNumber.from(charlieBlock.timestamp);
 
-
-                console.log('charlieStakeAmount + charlieRewardBefore= ', charlieStakeAmount.add(charlieRewardBefore).toString());
-                console.log('charlieStakeTs = ', charlieStakeTs.toString());
-                console.log('charlieTs = ', charlieTs.toString());
-                console.log('charlieTemp = ', termCharlie.toString());
-                
-                
-
                 const charlieTotalPenalty = (charlieAmount.add(charlieRewardBefore)).mul(termCharlie.sub(charlieTs).add(charlieStakeTs)).div(termCharlie);
                 const charlieCharityPenalty = charlieTotalPenalty.mul(CHARITY_PERCENT).div(PERCENT_BASE);
                 const charlieCommunityPenalty = charlieTotalPenalty.mul(COMMUNITY_PERCENT).div(PERCENT_BASE);
@@ -479,10 +559,6 @@ describe('test', async () => {
                 const charlieReward = await carp.getReward(token.address, charlie.address);
                 const darwinReward = await carp.getReward(token.address, darwin.address);
 
-                console.log('aliceReward =   ', aliceReward.toString());
-                console.log('bobReward =     ', bobReward.toString());
-                console.log('charlieReward = ', charlieReward.toString());
-
                 expect(aliceReward.div(HUN)).to.be.equal(
                     (penaltyToPoolBefore.mul(S_alice).div(totalShares).add(
                         charliePenaltyToPool.mul(S_alice).div(charlieTotalShares)).div(HUN)
@@ -522,9 +598,14 @@ describe('test', async () => {
                 await carp.connect(charlie).withdraw(token.address);
                 const poolAfter = await carp.pools(token.address);
                 const poolCurrentPriceAfter = poolAfter.currentPrice;
+
+                console.log(poolCurrentPriceAfter.toString());
+
                 expect(poolCurrentPriceAfter).to.be.equal( (charlieRewardBefore.add(charlieStakeAmount)).mul(LAMBDA_COEF).div(s_charlie) );
 
             })
+
+           
 
             describe('extra staking tests', async() => {
                 const termBeforeBobWithdraw = 0.5*YEAR;
@@ -544,18 +625,28 @@ describe('test', async () => {
                     const receipt = await tx.wait();
                     const block = await receipt.events[0].getBlock();
                     const ts = BigNumber.from(block.timestamp);
-                    console.log('termBob = ', termBob.toString());
-                    console.log('ts =      ', ts.toString());
-                    console.log('stakeTs = ', stakeTs.toString());
                     const totalPenalty = bobAmount.mul(termBob.sub(ts).add(stakeTs)).div(termBob);
-    
 
                     penaltyToPool = totalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
-                    console.log('penaltyToPool = ', penaltyToPool.toString());
-                    console.log('totalShares = ', totalShares.toString());
                     lastLambda = penaltyToPool.mul(LAMBDA_COEF).div(totalShares);
     
                 })
+
+                xit('shouldnt extraDeposit if pool doesnt exist', async() => {
+                    const termBeforeAliceExtra = 0.1*YEAR;
+                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+                    const extraAmount = ethers.utils.parseEther('10');
+                    await carp.connect(alice).extraDeposit(other.address, extraAmount);
+                })
+
+                xit('shouldnt extraDeposit if extra deposit is zero', async() => {
+                    const termBeforeAliceExtra = 0.1*YEAR;
+                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+                    await carp.connect(alice).extraDeposit(token.address, 0);
+                })
+
+
+
                 it('should correct extraDeposit', async() => {
                     const termBeforeAliceExtra = 0.1*YEAR;
                     await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
@@ -579,6 +670,12 @@ describe('test', async () => {
                     const pool = await carp.pools(token.address);
                     const poolTotalShares = pool.totalShares;
 
+                    const eventName = receipt.events[receipt.events.length - 1].event;
+                    const eventToken = receipt.events[receipt.events.length - 1].args.token;
+                    const eventDepositor = receipt.events[receipt.events.length - 1].args.depositor;
+                    const eventAmount = receipt.events[receipt.events.length - 1].args.amount;
+                    const eventTerm = receipt.events[receipt.events.length - 1].args.term;
+
                     const shares = extraAmount.div(INITIAL_PRICE).add(s_alice);
                     const sharesWithBonuses = shares.add(calculateBBonus(shares, aliceAmount.add(extraAmount))).add(calculateLBonus(shares, stakeTs.add(stakeTerm).sub(timestamp)));
 
@@ -591,6 +688,12 @@ describe('test', async () => {
                     expect(stakeTerm).to.be.equal(stakeTs.add(stakeTerm).sub(timestamp));
                     expect(stakeTs).to.be.equal(timestamp);
                     expect(poolTotalShares).to.be.equal(S_charlie.add(sharesWithBonuses));
+
+                    expect(eventName).to.be.equal('ExtraDeposit');
+                    expect(eventToken).to.be.equal(token.address);
+                    expect(eventDepositor).to.be.equal(alice.address);
+                    expect(eventAmount).to.be.equal(extraAmount);
+                    expect(eventTerm).to.be.equal(stakeTs.add(stakeTerm).sub(timestamp));
 
 
                     
@@ -626,12 +729,8 @@ describe('test', async () => {
 
                         const charlieReward = penaltyToPool.mul(S_charlie).div(totalShares);
                         const charlieIncome = charlieAmount.add(charlieReward);
-                        console.log('charlieReward = ', charlieReward.toString());
-                        console.log('charlieAmount = ', charlieAmount.toString());
                         const latePenalty = charlieReward.mul(PENALTY_PERCENT_PER_WEEK).mul(bigLateWeeks).div(PERCENT_BASE);
                         const charlieProfit = charlieIncome.sub(latePenalty);
-
-                        console.log('latePenalty = ', latePenalty.toString());
     
                         expect(charlieBalanceAfter.sub(charlieBalanceBefore).div(HUN)).to.be.equal(charlieProfit.div(HUN));
             
@@ -645,6 +744,10 @@ describe('test', async () => {
 
     
 // check extraDeposit if price changed
+// check bonus calculation
+// check events
+// check free late claim
+
 
 
 
