@@ -4,7 +4,7 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Carpediem is Ownable {
+contract CarpeDiem is Ownable {
     mapping(address => mapping(address => UserInfo)) public users; // token address => user address => UserInfo
     mapping(address => PoolInfo) public pools; // token address => PoolInfo
 
