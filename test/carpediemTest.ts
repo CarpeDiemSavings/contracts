@@ -68,19 +68,19 @@ describe('test', async () => {
     const other = accounts[7];
 
     describe('incorrect deployment', async () => {
-        xit('shouldnt deploy if charityWallet = 0', async() => {
+        it('shouldnt deploy if charityWallet = 0', async() => {
             const Token = await ethers.getContractFactory('Token');
             const Carpediem = await ethers.getContractFactory('Carpediem');
             token = await Token.deploy(TOTALSUPPLY);
             await expect(Carpediem.deploy(ZERO_ADDRESS, community.address, owner.address)).to.be.revertedWith('charityWallet cannot be zero');
         })
-        xit('shouldnt deploy if communityWallet = 0', async() => {
+        it('shouldnt deploy if communityWallet = 0', async() => {
             const Token = await ethers.getContractFactory('Token');
             const Carpediem = await ethers.getContractFactory('Carpediem');
             token = await Token.deploy(TOTALSUPPLY);
             await expect(Carpediem.deploy(charity.address, ZERO_ADDRESS, owner.address)).to.be.revertedWith('communityWallet cannot be zero');
         })
-        xit('shouldnt deploy if ownerWallet = 0', async() => {
+        it('shouldnt deploy if ownerWallet = 0', async() => {
             const Token = await ethers.getContractFactory('Token');
             const Carpediem = await ethers.getContractFactory('Carpediem');
             token = await Token.deploy(TOTALSUPPLY);
@@ -100,7 +100,7 @@ describe('test', async () => {
         await token.transfer(charlie.address, ethers.utils.parseEther('100'))
         await token.transfer(darwin.address, ethers.utils.parseEther('100'))
     })
-    xit('should get wallets', async() => {
+    it('should get wallets', async() => {
         const charityWallet = await carp.charityWallet();
         const communityWallet = await carp.communityWallet();
         const ownerWallet = await carp.ownerWallet();
@@ -109,24 +109,24 @@ describe('test', async () => {
         expect(ownerWallet).to.be.equal(owner.address);
     })
 
-    xit('shouldnt create pool with zero token address', async() => {
+    it('shouldnt create pool with zero token address', async() => {
         await expect(carp.createPool(ZERO_ADDRESS, INITIAL_PRICE, BBonus, LBonus)).to.be.revertedWith('token cannot be zero');
     })
-    xit('shouldnt create pool with zero initial share price', async() => {
+    it('shouldnt create pool with zero initial share price', async() => {
         await expect(carp.createPool(token.address, 0, BBonus, LBonus)).to.be.revertedWith('price cannot be zero');
     })
-    xit('shouldnt create pool with zero initial share price', async() => {
+    it('shouldnt create pool with zero initial share price', async() => {
         await expect(carp.createPool(token.address, INITIAL_PRICE, 0, LBonus)).to.be.revertedWith('B bonus amount cannot be zero');
     })
-    xit('shouldnt create pool with zero initial share price', async() => {
+    it('shouldnt create pool with zero initial share price', async() => {
         await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, 0)).to.be.revertedWith('L bonus period cannot be zero');
     })
-    xit('shouldnt create pool if pool with this token already exists', async() => {
+    it('shouldnt create pool if pool with this token already exists', async() => {
         await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
         await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus)).to.be.revertedWith('pool already exists');
     })
 
-    xit('should correctly create pool', async() => {
+    it('should correctly create pool', async() => {
         const tx = await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
         const receipt = await tx.wait();
         const numberOfPools = await carp.numberOfPools();
@@ -166,35 +166,35 @@ describe('test', async () => {
             await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
         })
 
-        xit('shouldnt deposit if pool doesnt exist (wrong address)', async() => {
+        it('shouldnt deposit if pool doesnt exist (wrong address)', async() => {
             const aliceAmount = ethers.utils.parseEther('1');
             const termAlice = YEAR;
             await token.connect(alice).approve(carp.address, aliceAmount);
             await expect(carp.connect(alice).deposit(other.address, aliceAmount, termAlice)).to.be.revertedWith('pool doesnt exist');
         })
 
-        xit('shouldnt deposit if already deposited', async() => {
+        it('shouldnt deposit if already deposited', async() => {
             const aliceAmount = ethers.utils.parseEther('1');
             const termAlice = YEAR;
             await token.connect(alice).approve(carp.address, aliceAmount);
             await carp.connect(alice).deposit(token.address, aliceAmount, termAlice);
             await expect(carp.connect(alice).deposit(token.address, aliceAmount, termAlice)).to.be.revertedWith('stake already made');
         })
-        xit('shouldnt deposit if amount is zero', async() => {
+        it('shouldnt deposit if amount is zero', async() => {
             const aliceAmount = ethers.utils.parseEther('1');
             const termAlice = YEAR;
             await token.connect(alice).approve(carp.address, aliceAmount);
             await expect(carp.connect(alice).deposit(token.address, 0, termAlice)).to.be.revertedWith('deposit cannot be zero');
         })
 
-        xit('shouldnt deposit if term is zero', async() => {
+        it('shouldnt deposit if term is zero', async() => {
             const aliceAmount = ethers.utils.parseEther('1');
             const termAlice = YEAR;
             await token.connect(alice).approve(carp.address, aliceAmount);
             await expect(carp.connect(alice).deposit(token.address, aliceAmount, 0)).to.be.revertedWith('term cannot be zero');
         })
 
-        xit('should correct deposit', async() => {
+        it('should correct deposit', async() => {
             const aliceAmount = ethers.utils.parseEther('1');
             const termAlice = YEAR;
             await token.connect(alice).approve(carp.address, aliceAmount);
@@ -244,11 +244,36 @@ describe('test', async () => {
 
         })
 
-        it('should correct buy small amount of shares', async() => {
+        // it('should correct buy small amount of shares', async() => {
+        //     const smallAmount = BigNumber.from('1');
+        //     await token.connect(alice).approve(carp.address, smallAmount);
+        //     const smallTerm = 1;
+        //     await carp.connect(alice).deposit(token.address, smallAmount, smallTerm);
+
+        //     const userInfo = await carp.users(token.address, alice.address);
+        //     const userShares = userInfo.shares;
+        //     const userSharesWithBonuses = userInfo.sharesWithBonuses;
+        //     const userLastLambda = userInfo.lastLambda;
+        //     const userAssignedReward = userInfo.assignedReward;
+
+        //     console.log('userShares =            ', userShares.toString());
+        //     console.log('userSharesWithBonuses = ', userSharesWithBonuses.toString());
+
+        //     const userStake = userInfo.stake;
+        //     const stakeAmount = userStake.amount;
+        //     const stakeTerm = userStake.term;
+        //     const stakeTs = userStake.ts;
+
+
+
+            
+        // })
+
+        it('should get maximum L bonus', async() => {
             const smallAmount = BigNumber.from('1');
             await token.connect(alice).approve(carp.address, smallAmount);
-            const smallTerm = 1;
-            await carp.connect(alice).deposit(token.address, smallAmount, smallTerm);
+            const bigTerm = 10 * YEAR;
+            await carp.connect(alice).deposit(token.address, smallAmount, bigTerm);
 
             const userInfo = await carp.users(token.address, alice.address);
             const userShares = userInfo.shares;
@@ -256,20 +281,43 @@ describe('test', async () => {
             const userLastLambda = userInfo.lastLambda;
             const userAssignedReward = userInfo.assignedReward;
 
-            console.log('userShares =            ', userShares.toString());
-            console.log('userSharesWithBonuses = ', userSharesWithBonuses.toString());
+            expect(userSharesWithBonuses).to.be.equal(userShares.mul(ONE.add(TWO)));
 
-            const userStake = userInfo.stake;
-            const stakeAmount = userStake.amount;
-            const stakeTerm = userStake.term;
-            const stakeTs = userStake.ts;
-
-
-
-            
         })
 
-        xit('should correct deposit for 3 users', async() => {
+        it('should get maximum B bonus', async() => {
+            const bigAmount = ethers.utils.parseEther('100000');
+            await token.connect(owner).approve(carp.address, bigAmount);
+            const smallTerm = 1;
+            await carp.connect(owner).deposit(token.address, bigAmount, smallTerm);
+
+            const userInfo = await carp.users(token.address, owner.address);
+            const userShares = userInfo.shares;
+            const userSharesWithBonuses = userInfo.sharesWithBonuses;
+            const userLastLambda = userInfo.lastLambda;
+            const userAssignedReward = userInfo.assignedReward;
+
+            expect(userSharesWithBonuses.div(LAMBDA_COEF).div(LAMBDA_COEF)).to.be.equal((userShares.add(userShares.mul(TEN).div(HUN))).div(LAMBDA_COEF).div(LAMBDA_COEF));
+
+        })
+
+        it('should get maximum B and L bonuses', async() => {
+            const bigAmount = ethers.utils.parseEther('100000');
+            await token.connect(owner).approve(carp.address, bigAmount);
+            const bigTerm = 10 * YEAR;
+            await carp.connect(owner).deposit(token.address, bigAmount, bigTerm);
+
+            const userInfo = await carp.users(token.address, owner.address);
+            const userShares = userInfo.shares;
+            const userSharesWithBonuses = userInfo.sharesWithBonuses;
+            const userLastLambda = userInfo.lastLambda;
+            const userAssignedReward = userInfo.assignedReward;
+
+            expect(userSharesWithBonuses).to.be.equal(userShares.add(userShares.mul(TEN).div(HUN)).add(userShares.mul(TWO)));
+
+        })
+
+        it('should correct deposit for 3 users', async() => {
             const aliceAmount = ethers.utils.parseEther('1');
             const bobAmount = ethers.utils.parseEther('2');
             const charlieAmount = ethers.utils.parseEther('4');
@@ -304,7 +352,7 @@ describe('test', async () => {
             expect(poolInitialPrice).to.be.equal(INITIAL_PRICE);
 
         })
-        xit('shouldnt extraDeposit if there is no stake yet', async() => {
+        it('shouldnt extraDeposit if there is no stake yet', async() => {
             const termBeforeAliceExtra = 0.1*YEAR;
             await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
             const extraAmount = ethers.utils.parseEther('10');
@@ -326,19 +374,48 @@ describe('test', async () => {
             const S_bob = s_bob.add(calculateBBonus(s_bob, bobAmount)).add(calculateLBonus(s_bob, termBob));
             const S_charlie = s_charlie.add(calculateBBonus(s_charlie, charlieAmount)).add(calculateLBonus(s_charlie, termCharlie));
 
+            let bobTs: any;
+
             beforeEach('several deposits', async() => {
                 await token.connect(alice).approve(carp.address, aliceAmount);
                 await token.connect(bob).approve(carp.address, bobAmount);
                 await token.connect(charlie).approve(carp.address, charlieAmount);
                 await carp.connect(alice).deposit(token.address, aliceAmount, termAlice);
-                await carp.connect(bob).deposit(token.address, bobAmount, termBob);
+                const tx = await carp.connect(bob).deposit(token.address, bobAmount, termBob);
+                const receipt = await tx.wait();
+                // console.log(receipt.events[0]);
+
+                const block = await receipt.events[0].getBlock();
+                bobTs = BigNumber.from(block.timestamp);
                 await carp.connect(charlie).deposit(token.address, charlieAmount, termCharlie);
             })
-            xit('bob early withdraws', async() => {
+
+            it('should correct show users penalty', async() => {
+                const bobBalanceBefore = await token.balanceOf(bob.address);
+                const userInfo = await carp.users(token.address, bob.address);
+
+                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
+                const penalty = await carp.getPenalty(token.address, bob.address);
+                const stake = userInfo.stake;
+                // const amount = stake.amount;
+                const stakeTs = stake.ts;
+
+                const bobBalanceAfter = await token.balanceOf(bob.address);
+                const totalPenalty = bobAmount.mul(termBob.sub(bobTs.add(ONE)).add(stakeTs)).div(termBob);
+                expect(penalty).to.be.equal(totalPenalty);
+
+            })
+
+            it('shouldnt withdraw if pool doesnt exists', async() => {
+                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
+                await expect(carp.connect(bob).withdraw(other.address)).to.be.revertedWith('pool doesnt exist');
+
+            })
+
+            it('bob early withdraws', async() => {
                 const bobBalanceBefore = await token.balanceOf(bob.address);
                 const userInfo = await carp.users(token.address, bob.address);
                 const stake = userInfo.stake;
-                // const amount = stake.amount;
                 const stakeTs = stake.ts;
                 let charityBalanceBefore = await token.balanceOf(charity.address);
                 let communityBalanceBefore = await token.balanceOf(community.address);
@@ -347,10 +424,7 @@ describe('test', async () => {
                 expect(charityBalanceBefore).to.be.equal(0);
                 expect(communityBalanceBefore).to.be.equal(0);
                 expect(burnBalanceBefore).to.be.equal(0);
-                // await time.increase(YEAR);
-                // const provider = ethers.getDefaultProvider();
                 await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
-                // await ethers.provider.send('evm_mine');
                 const tx = await carp.connect(bob).withdraw(token.address);
                 const receipt = await tx.wait();
                 const bobBalanceAfter = await token.balanceOf(bob.address);
@@ -411,20 +485,16 @@ describe('test', async () => {
 
             })
 
-            xit('bob withdraw after stake matured', async() => {
+            it('bob withdraw after stake matured', async() => {
                 const bobBalanceBefore = await token.balanceOf(bob.address);
                 const userInfo = await carp.users(token.address, bob.address);
                 const stake = userInfo.stake;
-                // const amount = stake.amount;
                 const stakeTs = stake.ts;
                 let charityBalanceBefore = await token.balanceOf(charity.address);
                 let communityBalanceBefore = await token.balanceOf(community.address);
                 let ownerBalanceBefore = await token.balanceOf(owner.address);
                 let burnBalanceBefore = await token.balanceOf(DEAD_WALLET);
-                // await time.increase(YEAR);
-                // const provider = ethers.getDefaultProvider();
                 await ethers.provider.send('evm_increaseTime', [+termBob.toString()]); 
-                // await ethers.provider.send('evm_mine');
                 const tx = await carp.connect(bob).withdraw(token.address);
                 const receipt = await tx.wait();
                 const bobBalanceAfter = await token.balanceOf(bob.address);
@@ -466,7 +536,7 @@ describe('test', async () => {
 
             })
 
-            xit('shouldnt give darwin reward for bobs early withdraw if darwin came after ', async() => {
+            it('shouldnt give darwin reward for bobs early withdraw if darwin came after ', async() => {
                 await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
                 await carp.connect(bob).withdraw(token.address);
                 const darwinAmount = ethers.utils.parseEther('1');
@@ -478,7 +548,7 @@ describe('test', async () => {
                 expect(darwinReward.div(TEN)).to.be.equal(0); 
             })
 
-            xit('should give darwin reward if bobs early withdraws, darwin came after and charlie early withdraw', async() => {
+            it('should give darwin reward if bobs early withdraws, darwin came after and charlie early withdraw', async() => {
                 const userInfo = await carp.users(token.address, bob.address);
                 const stake = userInfo.stake;
                 // const amount = stake.amount;
@@ -596,7 +666,7 @@ describe('test', async () => {
 
             })
 
-            xit('should correct calculate new price ', async() => {
+            it('should correct calculate new price ', async() => {
                 const userInfo = await carp.users(token.address, bob.address);
                 const stake = userInfo.stake;
                 const stakeTs = stake.ts;
@@ -656,22 +726,28 @@ describe('test', async () => {
     
                 })
 
-                xit('shouldnt extraDeposit if pool doesnt exist', async() => {
+                it('shouldnt extraDeposit if pool doesnt exist', async() => {
                     const termBeforeAliceExtra = 0.1*YEAR;
                     await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
                     const extraAmount = ethers.utils.parseEther('10');
                     await expect(carp.connect(alice).extraDeposit(other.address, extraAmount)).to.be.revertedWith('pool doesnt exist');
                 })
 
-                xit('shouldnt extraDeposit if extra deposit is zero', async() => {
+                it('shouldnt extraDeposit if extra deposit is zero', async() => {
                     const termBeforeAliceExtra = 0.1*YEAR;
                     await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
                     await expect(carp.connect(alice).extraDeposit(token.address, 0)).to.be.revertedWith('deposit cannot be zero');
                 })
+                it('shouldnt extraDeposit if stake matured', async() => {
+                    const termBeforeAliceExtra = 2 * YEAR;
+                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+                    const extraAmount = ethers.utils.parseEther('10');
+                    await expect(carp.connect(alice).extraDeposit(token.address, extraAmount)).to.be.revertedWith('stake matured');
+                })
 
 
 
-                xit('should correct extraDeposit', async() => {
+                it('should correct extraDeposit', async() => {
                     const termBeforeAliceExtra = 0.1*YEAR;
                     await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
                     const extraAmount = ethers.utils.parseEther('10');
@@ -723,7 +799,7 @@ describe('test', async () => {
                     
                 })
                 describe('late reward tests', async() => {
-                    xit('should correct calculate penalty if claimed late ', async() => {
+                    it('should correct calculate penalty if claimed late ', async() => {
                         const userInfo = await carp.users(token.address, charlie.address);
                         const userShares = userInfo.shares;
                         const userSharesWithBonuses = userInfo.sharesWithBonuses;
@@ -760,7 +836,7 @@ describe('test', async () => {
             
                     })
 
-                    xit('shouldnt take penalty if claimed in free late period (1 week)', async() => {
+                    it('shouldnt take penalty if claimed in free late period (1 week)', async() => {
                 
                         const latePeriod = 6*DAY;
                         const bigLateWeeks = BigNumber.from(latePeriod); 
@@ -785,7 +861,7 @@ describe('test', async () => {
             
                     })
 
-                    xit('should withdraw only deposit if claim is too late', async() => {
+                    it('should withdraw only deposit if claim is too late', async() => {
 
                         const latePeriod = 51*WEEK;
                         const bigLateWeeks = BigNumber.from(latePeriod); 
@@ -813,14 +889,5 @@ describe('test', async () => {
     })
 
     
-// check extraDeposit if price changed
-// check bonus calculation  
-// check events             +
-// check free late claim    +
-// check very late claim    +
-
-
-
-
 
 })
