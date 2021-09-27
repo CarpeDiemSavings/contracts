@@ -70,19 +70,19 @@ describe('test', async () => {
     describe('incorrect deployment', async () => {
         it('shouldnt deploy if charityWallet = 0', async() => {
             const Token = await ethers.getContractFactory('Token');
-            const Carpediem = await ethers.getContractFactory('Carpediem');
+            const Carpediem = await ethers.getContractFactory('CarpeDiem');
             token = await Token.deploy(TOTALSUPPLY);
             await expect(Carpediem.deploy(ZERO_ADDRESS, community.address, owner.address)).to.be.revertedWith('charityWallet cannot be zero');
         })
         it('shouldnt deploy if communityWallet = 0', async() => {
             const Token = await ethers.getContractFactory('Token');
-            const Carpediem = await ethers.getContractFactory('Carpediem');
+            const Carpediem = await ethers.getContractFactory('CarpeDiem');
             token = await Token.deploy(TOTALSUPPLY);
             await expect(Carpediem.deploy(charity.address, ZERO_ADDRESS, owner.address)).to.be.revertedWith('communityWallet cannot be zero');
         })
         it('shouldnt deploy if ownerWallet = 0', async() => {
             const Token = await ethers.getContractFactory('Token');
-            const Carpediem = await ethers.getContractFactory('Carpediem');
+            const Carpediem = await ethers.getContractFactory('CarpeDiem');
             token = await Token.deploy(TOTALSUPPLY);
             await expect(Carpediem.deploy(charity.address, community.address, ZERO_ADDRESS)).to.be.revertedWith('ownerWallet cannot be zero');
         })
@@ -92,7 +92,7 @@ describe('test', async () => {
 
     beforeEach('deployment', async() => {
         const Token = await ethers.getContractFactory('Token');
-        const Carpediem = await ethers.getContractFactory('Carpediem');
+        const Carpediem = await ethers.getContractFactory('CarpeDiem');
         token = await Token.deploy(TOTALSUPPLY);
         carp = await Carpediem.deploy(charity.address, community.address, owner.address);
         await token.transfer(alice.address, ethers.utils.parseEther('100'))
