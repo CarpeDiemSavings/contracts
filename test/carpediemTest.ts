@@ -28,6 +28,9 @@ const PERCENT_BASE = 100;
 const INTEREST_PERCENT = 50;
 const INITIAL_PRICE = ethers.utils.parseEther('1');
 
+const penaltyPercents = [50, 20, 10, 10, 10];
+
+
 const FREE_LATE_PERIOD = 7 * 86400;
 const PENALTY_PERCENT_PER_WEEK = BigNumber.from(2);
 
@@ -67,25 +70,34 @@ describe('test', async () => {
     const darwin = accounts[6];
     const other = accounts[7];
 
+    const wallets = [
+        other.address,
+        DEAD_WALLET,
+        owner.address,
+        charity.address,
+        community.address
+    ];
+
+
     describe('incorrect deployment', async () => {
-        it('shouldnt deploy if charityWallet = 0', async() => {
-            const Token = await ethers.getContractFactory('Token');
-            const Carpediem = await ethers.getContractFactory('CarpeDiem');
-            token = await Token.deploy(TOTALSUPPLY);
-            await expect(Carpediem.deploy(ZERO_ADDRESS, community.address, owner.address)).to.be.revertedWith('charityWallet cannot be zero');
-        })
-        it('shouldnt deploy if communityWallet = 0', async() => {
-            const Token = await ethers.getContractFactory('Token');
-            const Carpediem = await ethers.getContractFactory('CarpeDiem');
-            token = await Token.deploy(TOTALSUPPLY);
-            await expect(Carpediem.deploy(charity.address, ZERO_ADDRESS, owner.address)).to.be.revertedWith('communityWallet cannot be zero');
-        })
-        it('shouldnt deploy if ownerWallet = 0', async() => {
-            const Token = await ethers.getContractFactory('Token');
-            const Carpediem = await ethers.getContractFactory('CarpeDiem');
-            token = await Token.deploy(TOTALSUPPLY);
-            await expect(Carpediem.deploy(charity.address, community.address, ZERO_ADDRESS)).to.be.revertedWith('ownerWallet cannot be zero');
-        })
+        // it('shouldnt deploy if charityWallet = 0', async() => {
+        //     const Token = await ethers.getContractFactory('Token');
+        //     const Carpediem = await ethers.getContractFactory('CarpeDiem');
+        //     token = await Token.deploy(TOTALSUPPLY);
+        //     await expect(Carpediem.deploy()).to.be.revertedWith('charityWallet cannot be zero');
+        // })
+        // it('shouldnt deploy if communityWallet = 0', async() => {
+        //     const Token = await ethers.getContractFactory('Token');
+        //     const Carpediem = await ethers.getContractFactory('CarpeDiem');
+        //     token = await Token.deploy(TOTALSUPPLY);
+        //     await expect(Carpediem.deploy()).to.be.revertedWith('communityWallet cannot be zero');
+        // })
+        // it('shouldnt deploy if ownerWallet = 0', async() => {
+        //     const Token = await ethers.getContractFactory('Token');
+        //     const Carpediem = await ethers.getContractFactory('CarpeDiem');
+        //     token = await Token.deploy(TOTALSUPPLY);
+        //     await expect(Carpediem.deploy()).to.be.revertedWith('ownerWallet cannot be zero');
+        // })
 
 
     })
@@ -94,40 +106,33 @@ describe('test', async () => {
         const Token = await ethers.getContractFactory('Token');
         const Carpediem = await ethers.getContractFactory('CarpeDiem');
         token = await Token.deploy(TOTALSUPPLY);
-        carp = await Carpediem.deploy(charity.address, community.address, owner.address);
+        carp = await Carpediem.deploy();
         await token.transfer(alice.address, ethers.utils.parseEther('100'))
         await token.transfer(bob.address, ethers.utils.parseEther('100'))
         await token.transfer(charlie.address, ethers.utils.parseEther('100'))
         await token.transfer(darwin.address, ethers.utils.parseEther('100'))
     })
-    it('should get wallets', async() => {
-        const charityWallet = await carp.charityWallet();
-        const communityWallet = await carp.communityWallet();
-        const ownerWallet = await carp.ownerWallet();
-        expect(charityWallet).to.be.equal(charity.address);
-        expect(communityWallet).to.be.equal(community.address);
-        expect(ownerWallet).to.be.equal(owner.address);
-    })
+    
 
     it('shouldnt create pool with zero token address', async() => {
-        await expect(carp.createPool(ZERO_ADDRESS, INITIAL_PRICE, BBonus, LBonus)).to.be.revertedWith('token cannot be zero');
+        await expect(carp.createPool(ZERO_ADDRESS, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('token cannot be zero');
     })
     it('shouldnt create pool with zero initial share price', async() => {
-        await expect(carp.createPool(token.address, 0, BBonus, LBonus)).to.be.revertedWith('price cannot be zero');
+        await expect(carp.createPool(token.address, 0, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('price cannot be zero');
     })
     it('shouldnt create pool with zero initial share price', async() => {
-        await expect(carp.createPool(token.address, INITIAL_PRICE, 0, LBonus)).to.be.revertedWith('B bonus amount cannot be zero');
+        await expect(carp.createPool(token.address, INITIAL_PRICE, 0, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('B bonus amount cannot be zero');
     })
     it('shouldnt create pool with zero initial share price', async() => {
-        await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, 0)).to.be.revertedWith('L bonus period cannot be zero');
+        await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, 0, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('L bonus period cannot be zero');
     })
     it('shouldnt create pool if pool with this token already exists', async() => {
-        await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
-        await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus)).to.be.revertedWith('pool already exists');
+        await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
+        await expect(carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('pool already exists');
     })
 
     it('should correctly create pool', async() => {
-        const tx = await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
+        const tx = await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
         const receipt = await tx.wait();
         const numberOfPools = await carp.numberOfPools();
         const pool = await carp.pools(token.address);
@@ -163,7 +168,7 @@ describe('test', async () => {
 
     describe('deposit tests', async() => {
         beforeEach('create pool', async() => {
-            await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus);
+            await carp.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
         })
 
         it('shouldnt deposit if pool doesnt exist (wrong address)', async() => {

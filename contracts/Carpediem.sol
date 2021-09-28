@@ -25,34 +25,25 @@ contract CarpeDiem is Ownable {
     struct PoolInfo {
         address token;
         uint256 lambda;
-        uint256 totalShares; // total shares with the bonuses in the pool
-        uint256 currentPrice; // current shares price
-        uint256 initialPrice; // initial shares price
-        uint256 bBonusAmount; // B0 in 0.1*B/B0 formula
-        uint256 lBonusPeriod; // L0 in 2*L/L0 formula
+        uint256 totalShares;        // total shares with the bonuses in the pool
+        uint256 currentPrice;       // current shares price
+        uint256 initialPrice;       // initial shares price
+        uint256 bBonusAmount;       // B0 in 0.1*B/B0 formula
+        uint256 lBonusPeriod;       // L0 in 2*L/L0 formula
+        uint16 bBonusMaxPercent;    // maximum value of Bbonus
+        uint16 lBonusMaxPercent;    // maximum value of Lbonus
+        uint16[] penaltyPercents;   // percents to distribute
+        address[] wallets;          // wallets for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
     }
 
     uint256 public numberOfPools; // number of existing pools
-    address public immutable charityWallet; // charity wallet address
-    address public immutable communityWallet; // community wallet address
-    address public immutable ownerWallet; // owner's wallet address (can differ from deployer address)
-
-    uint16 constant interestPercent = 50; // penalty percent to reward pool
-    uint16 constant burnPercent = 20; // penalty percent to dead wallet
-    uint16 constant charityPercent = 10; // penalty percent to charity wallet
-    uint16 constant communityPercent = 10; // penalty percent to community wallet
-    uint16 constant ownerPercent = 10; // penalty percent to owner wallet
-
-    uint16 constant bBonusMaxPercent = 10; // maximum value of Bbonus
-    uint16 constant lBonusMaxPercent = 200; // maximum value of Lbonus
-
+    
     uint16 constant percentBase = 100;
     uint256 constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
     uint256 constant WEEK = 7 * 86400;
     uint256 constant FREE_LATE_PERIOD = WEEK; // period of free claiming after stake matured
     uint256 constant PENALTY_PERCENT_PER_WEEK = 2; // amount of percents applied to reward every week
 
-    address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD; // address forr burning
 
     event NewPool(
         address token,
@@ -85,33 +76,28 @@ contract CarpeDiem is Ownable {
 
     event NewPrice(uint256 oldPrice, uint256 newPrice);
 
-    constructor(
-        address _charityWallet,
-        address _communityWallet,
-        address _ownerWallet
-    ) {
-        require(_charityWallet != address(0), "charityWallet cannot be zero");
-        require(
-            _communityWallet != address(0),
-            "communityWallet cannot be zero"
-        );
-        require(_ownerWallet != address(0), "ownerWallet cannot be zero");
-        charityWallet = _charityWallet;
-        communityWallet = _communityWallet;
-        ownerWallet = _ownerWallet;
-    }
-
     function createPool(
         address _token,
         uint256 _initialPrice,
         uint256 _bBonusAmount,
-        uint256 _lBonusPeriod
+        uint256 _lBonusPeriod,
+        uint16 _bBonusMaxPercent,   
+        uint16 _lBonusMaxPercent, 
+        uint16[] memory _percents,      
+        address[] memory _wallets
     ) external onlyOwner {
         require(pools[_token].token == address(0), "pool already exists");
         require(_token != address(0), "token cannot be zero");
         require(_initialPrice != 0, "price cannot be zero");
         require(_bBonusAmount != 0, "B bonus amount cannot be zero");
         require(_lBonusPeriod != 0, "L bonus period cannot be zero");
+        require(_percents.length == _wallets.length, "incorrect input arrays");
+        uint256 sum;
+        for (uint256 i = 0; i < _percents.length; i++) {
+            require(_wallets[i] != address(0), "wallet cannot be == 0");
+            sum += _percents[i];
+        }
+        require(sum == percentBase, "percent sum must be == 100");
         pools[_token] = PoolInfo({
             token: _token,
             lambda: 0,
@@ -119,7 +105,11 @@ contract CarpeDiem is Ownable {
             currentPrice: _initialPrice,
             initialPrice: _initialPrice,
             bBonusAmount: _bBonusAmount,
-            lBonusPeriod: _lBonusPeriod
+            lBonusPeriod: _lBonusPeriod,
+            penaltyPercents: _percents,      
+            bBonusMaxPercent: _bBonusMaxPercent,   
+            lBonusMaxPercent: _lBonusMaxPercent, 
+            wallets: _wallets
         });
         numberOfPools++;
         emit NewPool(_token, _initialPrice, _bBonusAmount, _lBonusPeriod);
@@ -251,6 +241,7 @@ contract CarpeDiem is Ownable {
         uint256 _deposit
     ) internal view returns (uint256) {
         uint256 bBonus = pools[_token].bBonusAmount;
+        uint16 bBonusMaxPercent = pools[_token].bBonusMaxPercent;
         if (_deposit < bBonus)
             return
                 (_shares * uint256(bBonusMaxPercent) * _deposit) /
@@ -264,6 +255,7 @@ contract CarpeDiem is Ownable {
         uint256 _term
     ) internal view returns (uint256) {
         uint256 lBonus = pools[_token].lBonusPeriod;
+        uint256 lBonusMaxPercent = pools[_token].lBonusMaxPercent;
         if (_term < lBonus)
             return
                 (_shares * uint256(lBonusMaxPercent) * _term) /
@@ -298,25 +290,18 @@ contract CarpeDiem is Ownable {
         address _user,
         uint256 _penalty
     ) internal {
-        IERC20(_token).transfer(
-            DEAD_WALLET,
-            (_penalty * uint256(burnPercent)) / uint256(percentBase)
-        );
-        IERC20(_token).transfer(
-            charityWallet,
-            (_penalty * uint256(charityPercent)) / uint256(percentBase)
-        );
-        IERC20(_token).transfer(
-            communityWallet,
-            (_penalty * uint256(communityPercent)) / uint256(percentBase)
-        );
-        IERC20(_token).transfer(
-            owner(),
-            (_penalty * uint256(ownerPercent)) / uint256(percentBase)
-        );
+        address[] memory wallets = pools[_token].wallets;
+        uint16[] memory percents = pools[_token].penaltyPercents;
+        for (uint256 i = 1; i < wallets.length; i++) {                  // skip wallets[0]
+            if (percents[i] > 0) IERC20(_token).transfer(
+                wallets[i],
+                (_penalty * uint256(percents[i])) / uint256(percentBase)
+            );
+        }
+
         pools[_token].totalShares -= users[_token][_user].sharesWithBonuses;
         pools[_token].lambda +=
-            (_penalty * MULTIPLIER * MULTIPLIER * uint256(interestPercent)) /
+            (_penalty * MULTIPLIER * MULTIPLIER * uint256(percents[0])) /
             (uint256(percentBase) * pools[_token].totalShares);
     }
 
