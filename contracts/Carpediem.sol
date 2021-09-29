@@ -40,6 +40,7 @@ contract CarpeDiem is Ownable {
     uint256 constant WEEK = 7 * 86400;
     uint256 constant FREE_LATE_PERIOD = WEEK; // period of free claiming after stake matured
     uint256 constant PENALTY_PERCENT_PER_WEEK = 2; // amount of percents applied to reward every week
+    uint256 public constant MAX_PRICE = 1e12 * MULTIPLIER; // max price (1 share for 1 trillion tokens) to prevent overflow
 
 
     event NewPool(
@@ -82,8 +83,8 @@ contract CarpeDiem is Ownable {
         uint256 _lBonusPeriod,
         uint16 _bBonusMaxPercent,   
         uint16 _lBonusMaxPercent, 
-        uint16[] memory _percents,      
-        address[] memory _wallets
+        uint16[] calldata _percents,      
+        address[] calldata _wallets
     ) external onlyOwner {
         require(pools[_token].token == address(0), "pool already exists");
         require(_token != address(0), "token cannot be zero");
@@ -112,6 +113,11 @@ contract CarpeDiem is Ownable {
         });
         numberOfPools++;
         emit NewPool(_token, _initialPrice, _bBonusAmount, _lBonusPeriod);
+    }
+
+    function setWallets(address _token, address[] calldata _newWallets) external onlyOwner {
+        require(_newWallets.length == pools[_token].wallets.length, "incorrect data");
+        pools[_token].wallets = _newWallets;
     }
 
     function deposit(
@@ -331,6 +337,7 @@ contract CarpeDiem is Ownable {
         uint256 oldPrice = pools[_token].currentPrice;
         if (_profit > (oldPrice * _shares) / (MULTIPLIER * MULTIPLIER)) { // equivalent to _profit / shares > oldPrice
             uint256 newPrice = (_profit * MULTIPLIER * MULTIPLIER) / _shares;
+            if (newPrice > MAX_PRICE ) newPrice = MAX_PRICE;
             pools[_token].currentPrice = newPrice;
             emit NewPrice(oldPrice, newPrice);
         }
