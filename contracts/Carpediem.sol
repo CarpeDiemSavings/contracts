@@ -4,22 +4,19 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import "hardhat/console.sol";
 contract CarpeDiem is Ownable {
-    mapping(address => mapping(address => UserInfo)) public users; // token address => user address => UserInfo
+    mapping(address => mapping(address => StakeInfo[])) public stakes; // token address => user address => UserInfo
     mapping(address => PoolInfo) public pools; // token address => PoolInfo
 
     struct StakeInfo {
         uint256 amount;
         uint256 term;
         uint256 ts;
-    }
-
-    struct UserInfo {
         uint256 shares;
         uint256 sharesWithBonuses;
         uint256 lastLambda;
-        uint256 assignedReward;
-        StakeInfo stake;
+        uint256 assignedReward;   
     }
 
     struct PoolInfo {
@@ -55,13 +52,15 @@ contract CarpeDiem is Ownable {
     event Deposit(
         address token,
         address depositor,
+        uint256 id,
         uint256 amount,
         uint256 term
     );
 
-    event ExtraDeposit(
+    event UpgradedStake(
         address token,
         address depositor,
+        uint256 id,
         uint256 amount,
         uint256 term
     );
@@ -124,115 +123,132 @@ contract CarpeDiem is Ownable {
         require(pools[_token].token == _token, "pool doesnt exist");
         require(_amount > 0, "deposit cannot be zero");
         require(_term > 0, "term cannot be zero");
-        require(users[_token][sender].stake.amount == 0, "stake already made");
-        _buySharesForUser(_token, _amount, sender);
-        _boostSharesForUser(_token, sender, _term, _amount);
-        users[_token][sender].lastLambda = pools[_token].lambda;
-        users[_token][sender].stake = StakeInfo(
-            _amount,
-            _term,
-            block.timestamp
+        uint256 shares = _buyShares(_token, _amount, sender);
+        uint256 boostedShares = _getBoostedShares(_token, shares, _term, _amount);
+        pools[_token].totalShares += boostedShares;
+
+        stakes[_token][sender].push(
+            StakeInfo(
+                _amount,
+                _term,
+                block.timestamp,
+                shares,
+                boostedShares,
+                pools[_token].lambda,
+                0
+            )
         );
-        emit Deposit(_token, sender, _amount, _term);
+
+        emit Deposit(_token, sender, stakes[_token][sender].length - 1, _amount, _term);
     }
 
-    function extraDeposit(address _token, uint256 _amount) external {
+    function upgradeStake(address _token, uint256 _stakeId, uint256 _amount) external {
         address sender = _msgSender();
         require(pools[_token].token == _token, "pool doesnt exist");
         require(_amount > 0, "deposit cannot be zero");
-        require(users[_token][sender].stake.amount != 0, "no stake yet");
-        uint256 stakeTerm = users[_token][sender].stake.term;
-        uint256 stakeTs = users[_token][sender].stake.ts;
+        require(_stakeId < stakes[_token][sender].length, "no such stake id");
+        uint256 stakeTerm = stakes[_token][sender][_stakeId].term;
+        uint256 stakeTs = stakes[_token][sender][_stakeId].ts;
+        require(stakeTs > 0, "stake was deleted");
         require(block.timestamp < stakeTerm + stakeTs, "stake matured");
-        users[_token][sender].assignedReward += getReward(_token, sender);
-        uint256 stakeDeposit = users[_token][sender].stake.amount;
-        _buySharesForUser(_token, _amount, sender);
-        _boostSharesForUser(
+        uint256 stakeDeposit = stakes[_token][sender][_stakeId].amount;
+        uint256 extraShares = _buyShares(_token, _amount, sender);
+        uint256 shares = stakes[_token][sender][_stakeId].shares;
+        uint256 boostedSharesBefore = stakes[_token][sender][_stakeId].sharesWithBonuses;
+        uint256 boostedShares = _getBoostedShares(
             _token,
-            sender,
+            shares + extraShares,
             stakeTs + stakeTerm - block.timestamp,
             stakeDeposit + _amount
         );
-        users[_token][sender].lastLambda = pools[_token].lambda;
-        users[_token][sender].stake = StakeInfo(
+
+        pools[_token].totalShares += boostedShares - boostedSharesBefore;
+        stakes[_token][sender][_stakeId] = StakeInfo(
             stakeDeposit + _amount,
             stakeTs + stakeTerm - block.timestamp,
-            block.timestamp
+            block.timestamp,
+            shares + extraShares,
+            boostedShares,
+            pools[_token].lambda,
+            getReward(_token, sender, _stakeId)
         );
-        emit ExtraDeposit(
+
+        emit UpgradedStake(
             _token,
             sender,
+            _stakeId,
             _amount,
             stakeTs + stakeTerm - block.timestamp
         );
     }
 
-    function withdraw(address _token) external {
+    function withdraw(address _token, uint256 _stakeId) external {
         address sender = _msgSender();
         require(pools[_token].token == _token, "pool doesnt exist");
-        uint256 deposit = users[_token][sender].stake.amount;
-        uint256 reward = getReward(_token, sender);
-        uint256 penalty = _getPenalty(_token, sender, deposit, reward);
-        _changeSharesPrice(_token, sender, deposit + reward - penalty);
-        _distributePenalty(_token, sender, penalty);
-        delete users[_token][sender];
+        require(_stakeId < stakes[_token][sender].length, "no such stake id");
+        uint256 deposit = stakes[_token][sender][_stakeId].amount;
+        require(deposit > 0, "stake was deleted");
+        uint256 reward = getReward(_token, sender, _stakeId);
+        uint256 penalty = _getPenalty(_token, sender, deposit, reward, _stakeId);
+        uint256 userShares = stakes[_token][sender][_stakeId].shares;
+        _changeSharesPrice(_token, deposit + reward - penalty, userShares);
+        _distributePenalty(_token, sender, _stakeId, penalty);
+        delete stakes[_token][sender][_stakeId];
+        /// TODO CHECK DATA IN ARRAY
         IERC20(_token).transfer(sender, deposit + reward - penalty);
         emit Withdraw(_token, sender, deposit, reward, penalty);
     }
 
-    function getPenalty(address _token, address _user)
+    function getPenalty(address _token, address _user, uint256 _stakeId)
         external
         view
         returns (uint256)
     {
-        uint256 deposit = users[_token][_user].stake.amount;
-        uint256 reward = getReward(_token, _user);
-        return _getPenalty(_token, _user, deposit, reward);
+        uint256 deposit = stakes[_token][_user][_stakeId].amount;
+        uint256 reward = getReward(_token, _user, _stakeId);
+        return _getPenalty(_token, _user, deposit, reward, _stakeId);
     }
 
-    function getReward(address _token, address _user)
+    function getReward(address _token, address _user, uint256 _stakeId)
         public
         view
         returns (uint256)
     {
-        uint256 lastLambda = users[_token][_user].lastLambda;
-        uint256 reward = users[_token][_user].assignedReward;
+        uint256 lastLambda = stakes[_token][_user][_stakeId].lastLambda;
+        uint256 reward = stakes[_token][_user][_stakeId].assignedReward;
         uint256 lambda = pools[_token].lambda;
         if (lambda - lastLambda > 0) {
             reward +=
                 ((lambda - lastLambda) *
-                    users[_token][_user].sharesWithBonuses) /
+                    stakes[_token][_user][_stakeId].sharesWithBonuses) /
                 (MULTIPLIER * MULTIPLIER);
         }
         return reward;
     }
 
     //// buys shares for user for current share price
-    function _buySharesForUser(
+    function _buyShares(
         address _token,
         uint256 _amount,
         address _user
-    ) internal {
+    ) internal returns(uint256){
         IERC20(_token).transferFrom(_user, address(this), _amount); // take tokens
         uint256 sharesToBuy = (_amount * MULTIPLIER) /
             pools[_token].currentPrice; // calculate corresponding amount of shares
-        users[_token][_user].shares += sharesToBuy * MULTIPLIER;
+        return sharesToBuy * MULTIPLIER;
     }
 
     // boost user shares for both deposit and extraDeposit
-    function _boostSharesForUser(
+    function _getBoostedShares(
         address _token,
-        address _user,
+        uint256 _shares,
         uint256 _term,
         uint256 _deposit
-    ) internal {
-        uint256 sharesBoostedBefore = users[_token][_user].sharesWithBonuses;
-        uint256 shares = users[_token][_user].shares;
-        uint256 sharesBoosted = shares +
-            _getBonusB(_token, shares, _deposit) +
-            _getBonusL(_token, shares, _term);
-        users[_token][_user].sharesWithBonuses = sharesBoosted;
-        pools[_token].totalShares += sharesBoosted - sharesBoostedBefore;
+    ) internal view returns(uint256) {
+        return _shares +
+            _getBonusB(_token, _shares, _deposit) +
+            _getBonusL(_token, _shares, _term);
+        
     }
 
     function _getBonusB(
@@ -267,10 +283,11 @@ contract CarpeDiem is Ownable {
         address _token,
         address _user,
         uint256 _deposit,
-        uint256 _reward
+        uint256 _reward,
+        uint256 _stakeId
     ) internal view returns (uint256) {
-        uint256 term = users[_token][_user].stake.term;
-        uint256 stakeTs = users[_token][_user].stake.ts;
+        uint256 term = stakes[_token][_user][_stakeId].term;
+        uint256 stakeTs = stakes[_token][_user][_stakeId].ts;
         if (stakeTs + term <= block.timestamp) {
             if (stakeTs + term + FREE_LATE_PERIOD > block.timestamp) return 0;
             uint256 lateWeeks = (block.timestamp - (stakeTs + term)) / WEEK;
@@ -288,6 +305,7 @@ contract CarpeDiem is Ownable {
     function _distributePenalty(
         address _token,
         address _user,
+        uint256 _stakeId,
         uint256 _penalty
     ) internal {
         address[] memory wallets = pools[_token].wallets;
@@ -299,7 +317,7 @@ contract CarpeDiem is Ownable {
             );
         }
 
-        pools[_token].totalShares -= users[_token][_user].sharesWithBonuses;
+        pools[_token].totalShares -= stakes[_token][_user][_stakeId].sharesWithBonuses;
         pools[_token].lambda +=
             (_penalty * MULTIPLIER * MULTIPLIER * uint256(percents[0])) /
             (uint256(percentBase) * pools[_token].totalShares);
@@ -307,13 +325,12 @@ contract CarpeDiem is Ownable {
 
     function _changeSharesPrice(
         address _token,
-        address _user,
-        uint256 _profit
+        uint256 _profit,
+        uint256 _shares
     ) private {
         uint256 oldPrice = pools[_token].currentPrice;
-        uint256 userShares = users[_token][_user].shares;
-        if (_profit > (oldPrice * userShares) / (MULTIPLIER * MULTIPLIER)) { // equivalent to _profit / shares > oldPrice
-            uint256 newPrice = (_profit * MULTIPLIER * MULTIPLIER) / userShares;
+        if (_profit > (oldPrice * _shares) / (MULTIPLIER * MULTIPLIER)) { // equivalent to _profit / shares > oldPrice
+            uint256 newPrice = (_profit * MULTIPLIER * MULTIPLIER) / _shares;
             pools[_token].currentPrice = newPrice;
             emit NewPrice(oldPrice, newPrice);
         }
