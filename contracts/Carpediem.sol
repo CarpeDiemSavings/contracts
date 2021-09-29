@@ -194,12 +194,25 @@ contract CarpeDiem is Ownable {
         require(_stakeId < stakes[_token][sender].length, "no such stake id");
         uint256 deposit = stakes[_token][sender][_stakeId].amount;
         require(deposit > 0, "stake was deleted");
+        console.log("withdraw: here1");
         uint256 reward = getReward(_token, sender, _stakeId);
         uint256 penalty = _getPenalty(_token, sender, deposit, reward, _stakeId);
+                console.log("withdraw: here2");
+
         uint256 userShares = stakes[_token][sender][_stakeId].shares;
+                console.log("withdraw: here3");
+
         _changeSharesPrice(_token, deposit + reward - penalty, userShares);
+                console.log("withdraw: deposit = ", deposit);
+                console.log("withdraw: reward  = ", reward);
+                console.log("withdraw: penalty = ", penalty);
+
         _distributePenalty(_token, sender, _stakeId, penalty);
+                        console.log("withdraw: here5");
+
         delete stakes[_token][sender][_stakeId];
+                        console.log("withdraw: here6");
+
         /// TODO CHECK DATA IN ARRAY
         IERC20(_token).transfer(sender, deposit + reward - penalty);
         emit Withdraw(_token, sender, deposit, reward, penalty);
@@ -324,9 +337,13 @@ contract CarpeDiem is Ownable {
         }
 
         pools[_token].totalShares -= stakes[_token][_user][_stakeId].sharesWithBonuses;
-        pools[_token].lambda +=
-            (_penalty * MULTIPLIER * MULTIPLIER * uint256(percents[0])) /
-            (uint256(percentBase) * pools[_token].totalShares);
+        if(pools[_token].totalShares == 0) {
+            pools[_token].lambda = 0;
+        } else {
+            pools[_token].lambda +=
+                (_penalty * MULTIPLIER * MULTIPLIER * uint256(percents[0])) /
+                (uint256(percentBase) * pools[_token].totalShares);
+        }
     }
 
     function _changeSharesPrice(
@@ -335,6 +352,9 @@ contract CarpeDiem is Ownable {
         uint256 _shares
     ) private {
         uint256 oldPrice = pools[_token].currentPrice;
+        console.log("_changeSharesPrice: _shares = ", _shares);
+        console.log("_changeSharesPrice: _profit = ", _profit);
+        console.log("_changeSharesPrice: _profit > ", (oldPrice * _shares) / (MULTIPLIER * MULTIPLIER) );
         if (_profit > (oldPrice * _shares) / (MULTIPLIER * MULTIPLIER)) { // equivalent to _profit / shares > oldPrice
             uint256 newPrice = (_profit * MULTIPLIER * MULTIPLIER) / _shares;
             if (newPrice > MAX_PRICE ) newPrice = MAX_PRICE;
