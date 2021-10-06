@@ -29,6 +29,8 @@ contract CarpeDiem is Ownable {
     uint16[] public distributionPercents; // percents to distribute
     address[] public distributionAddresses; // addresses for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
 
+    address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
+
     uint256 private constant percentBase = 100;
     uint256 private constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
     uint256 private constant WEEK = 7 * 86400;
@@ -91,10 +93,10 @@ contract CarpeDiem is Ownable {
         return stakes[_user];
     }
 
-    function setWallets(address[] calldata _newDistributionAddresses) external onlyOwner {
+    function setDistributionAddresses(address[] calldata _newDistributionAddresses) external onlyOwner {
         require(
-            _newDistributionAddresses.length == distributionAddresses.length, 
-            "incorrect data"
+            _newDistributionAddresses.length == 3, 
+            "distributionAddresses length must be == 3"
         );
         distributionAddresses = _newDistributionAddresses;
     }
@@ -177,7 +179,7 @@ contract CarpeDiem is Ownable {
                 (penalty *
                     MULTIPLIER *
                     MULTIPLIER *
-                    uint256(distributionPercents[0])) /
+                    uint256(distributionPercents[4])) /
                 (percentBase * totalShares);
         }
         delete stakes[sender][_stakeId];
@@ -283,17 +285,21 @@ contract CarpeDiem is Ownable {
     function _distributePenalty(
         uint256 _penalty
     ) internal {
-        address[] memory poolAddresses = distributionAddresses;
+        address[] memory addresses = distributionAddresses;
         uint16[] memory poolPercents = distributionPercents;
         uint256 base = percentBase;
         address poolToken = token;
-        for (uint256 i = 1; i < poolAddresses.length; i++) {
+        for (uint256 i = 0; i < addresses.length; i++) {
             if (poolPercents[i] > 0)
                 IERC20(poolToken).transfer(
-                    poolAddresses[i],
+                    addresses[i],
                     (_penalty * poolPercents[i]) / base
                 );
         }
+        if (poolPercents[3] > 0) IERC20(poolToken).transfer(
+                    DEAD_WALLET,
+                    (_penalty * poolPercents[3]) / base
+                );
 
     }
 

@@ -111,7 +111,16 @@
 66
 67
 68
-69</td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78</td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -143,24 +152,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">56×</span>
+<span class="cline-any cline-yes">55×</span>
+<span class="cline-any cline-yes">54×</span>
+<span class="cline-any cline-yes">53×</span>
+<span class="cline-any cline-yes">52×</span>
+<span class="cline-any cline-yes">51×</span>
+<span class="cline-any cline-yes">50×</span>
+<span class="cline-any cline-yes">50×</span>
+<span class="cline-any cline-yes">250×</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">21×</span>
-<span class="cline-any cline-yes">20×</span>
-<span class="cline-any cline-yes">19×</span>
-<span class="cline-any cline-yes">18×</span>
-<span class="cline-any cline-yes">17×</span>
-<span class="cline-any cline-yes">16×</span>
-<span class="cline-any cline-yes">15×</span>
-<span class="cline-any cline-yes">15×</span>
-<span class="cline-any cline-yes">71×</span>
-<span class="cline-any cline-yes">70×</span>
+<span class="cline-any cline-yes">50×</span>
+<span class="cline-any cline-yes">49×</span>
+<span class="cline-any cline-yes">145×</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">14×</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13×</span>
-<span class="cline-any cline-yes">13×</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">48×</span>
+<span class="cline-any cline-yes">48×</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -169,32 +176,42 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13×</span>
-<span class="cline-any cline-yes">13×</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13×</span>
-<span class="cline-any cline-yes">12×</span>
-<span class="cline-any cline-yes">12×</span>
-<span class="cline-any cline-yes">12×</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">48×</span>
+<span class="cline-any cline-yes">48×</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">48×</span>
+<span class="cline-any cline-yes">41×</span>
+<span class="cline-any cline-yes">41×</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">//SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.7;
 &nbsp;
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./Carpediem.sol";
-contract CarpediemFactory is Ownable {
+import "./CarpeDiem.sol";
 &nbsp;
-    mapping (address =&gt; address) public getPool;
+contract CarpediemFactory is Ownable {
 &nbsp;
     address[] public allPools;
 &nbsp;
     uint256 constant percentBase = 100;
 &nbsp;
     event NewPool(
-        address token, 
-        address poolAddress, 
+        address token,
+        address poolAddress,
         uint256 initialPrice,
         uint256 bBonusAmount,
         uint256 lBonusPeriod,
@@ -209,32 +226,35 @@ contract CarpediemFactory is Ownable {
         uint256 _lBonusPeriod,
         uint256 _bBonusMaxPercent,
         uint256 _lBonusMaxPercent,
-        uint16[] memory _percents,
-        address[] memory _wallets
+        uint16[] memory _distributionPercents,
+        address[] memory _distributionAddresses
     ) external onlyOwner {
-        require(getPool[_token] == address(0), "pool already exists");
         require(_token != address(0), "token cannot be zero");
         require(_initialPrice != 0, "price cannot be zero");
         require(_bBonusAmount != 0, "B bonus amount cannot be zero");
         require(_lBonusPeriod != 0, "L bonus period cannot be zero");
-        require(_percents.length == _wallets.length, "incorrect input arrays");
+        require(_distributionPercents.length == 5, "distributionPercents length must be == 5");
+        require(_distributionAddresses.length == 3, "distributionAddresses length must be == 3");
         uint256 sum;
-        for (uint256 i = 0; i &lt; _percents.length; i++) {
-            require(_wallets[i] != address(0), "wallet cannot be == 0");
-            sum += _percents[i];
+        for (uint256 i = 0; i &lt; _distributionPercents.length; i++) {
+            sum += _distributionPercents[i];
         }
         require(sum == percentBase, "percent sum must be == 100");
-&nbsp;
-        bytes32 salt = keccak256(abi.encodePacked(_token));
-        bytes memory bytecode = abi.encodePacked(type(CarpeDiem).creationCode, abi.encode(
-            _token, 
-            _initialPrice, 
-            _bBonusAmount, 
-            _lBonusPeriod, 
-            _bBonusMaxPercent, 
-            _lBonusMaxPercent,
-            _percents,
-            _wallets
+        for (uint256 i = 0; i &lt; _distributionAddresses.length; i++) {
+            require(_distributionAddresses[i] != address(0), "wallet cannot be == 0");
+        }
+        bytes32 salt = keccak256(abi.encodePacked(allPools.length));
+        bytes memory bytecode = abi.encodePacked(
+            type(CarpeDiem).creationCode,
+            abi.encode(
+                _token,
+                _initialPrice,
+                _bBonusAmount,
+                _lBonusPeriod,
+                _bBonusMaxPercent,
+                _lBonusMaxPercent,
+                _distributionPercents,
+                _distributionAddresses
             )
         );
         address pool;
@@ -242,18 +262,25 @@ contract CarpediemFactory is Ownable {
             pool := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
         CarpeDiem(pool).transferOwnership(msg.sender);
-        getPool[_token] = pool;
         allPools.push(pool);
-        emit NewPool(_token, pool, _initialPrice, _bBonusAmount, _lBonusPeriod, _bBonusMaxPercent, _lBonusMaxPercent);
-&nbsp;
+        emit NewPool(
+            _token,
+            pool,
+            _initialPrice,
+            _bBonusAmount,
+            _lBonusPeriod,
+            _bBonusMaxPercent,
+            _lBonusMaxPercent
+        );
     }
-}</pre></td></tr>
+}
+&nbsp;</pre></td></tr>
 </table></pre>
 <div class='push'></div><!-- for sticky footer -->
 </div><!-- /wrapper -->
 <div class='footer quiet pad2 space-top1 center small'>
   Code coverage
-  generated by <a href="http://istanbul-js.org/" target="_blank">istanbul</a> at Fri Oct 01 2021 15:45:15 GMT+0700 (Novosibirsk Standard Time)
+  generated by <a href="http://istanbul-js.org/" target="_blank">istanbul</a> at Wed Oct 06 2021 17:55:54 GMT+0700 (Novosibirsk Standard Time)
 </div>
 </div>
 <script src="../prettify.js"></script>

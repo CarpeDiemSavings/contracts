@@ -29,7 +29,7 @@ const PERCENT_BASE = 100;
 const INTEREST_PERCENT = 50;
 const INITIAL_PRICE = ethers.utils.parseEther('1');
 
-const penaltyPercents = [50, 20, 10, 10, 10];
+const penaltyPercents = [10, 10, 10, 20, 50];
 
 const FREE_LATE_PERIOD = 7 * 86400;
 const PENALTY_PERCENT_PER_WEEK = BigNumber.from(2);
@@ -103,21 +103,29 @@ describe('incorrect deployment', async() => {
         await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, 0, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('L bonus period cannot be zero');
     })
 
-    it('shouldnt create pool with incorrect arrays length', async() => {
+    it('shouldnt create pool with incorrect addresses array length', async() => {
         const wrongWallets = [
             other.address,
             DEAD_WALLET,
             owner.address,
             charity.address,
         ];
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.revertedWith('incorrect input arrays');
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.revertedWith('distributionAddresses length must be == 3');
+    })
+
+    it('shouldnt create pool with incorrect percents array length', async() => {
+        const wrongPercents = [
+            25,
+            25,
+            10,
+            40
+        ];
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, wrongPercents, wallets)).to.be.revertedWith('distributionPercents length must be == 5');
     })
 
     it('shouldnt create pool if at least one wallet is zero', async() => {
         const wrongWallets = [
             ZERO_ADDRESS,
-            DEAD_WALLET,
-            owner.address,
             charity.address,
             community.address
         ];
@@ -134,8 +142,6 @@ describe('incorrect deployment', async() => {
 describe('test', async () => {
    
     wallets = [
-        other.address,
-        DEAD_WALLET,
         owner.address,
         charity.address,
         community.address
@@ -233,14 +239,12 @@ describe('test', async () => {
         
         it('should correct set new wallets', async() => {
             const newWallets = [
-                accounts[10].address,
-                accounts[11].address,
                 accounts[12].address,
                 accounts[13].address,
                 accounts[14].address
             ]
 
-            await carp.connect(owner).setWallets(newWallets);
+            await carp.connect(owner).setDistributionAddresses(newWallets);
             const walletsFromPool = await carp.getDistributionAddresses();
             for (let i = 0; i < walletsFromPool; i++ ) {
                 expect(walletsFromPool[i]).to.be.equal(newWallets[i]);
@@ -255,7 +259,7 @@ describe('test', async () => {
                 accounts[13].address,
             ]
 
-            await expect(carp.connect(owner).setWallets(newWallets)).to.be.revertedWith('incorrect data');
+            await expect(carp.connect(owner).setDistributionAddresses(newWallets)).to.be.revertedWith('distributionAddresses length must be == 3');
         })
 
         it('shouldnt deposit if amount is zero', async() => {

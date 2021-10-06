@@ -27,21 +27,23 @@ contract CarpediemFactory is Ownable {
         uint256 _lBonusPeriod,
         uint256 _bBonusMaxPercent,
         uint256 _lBonusMaxPercent,
-        uint16[] memory _percents,
-        address[] memory _wallets
+        uint16[] memory _distributionPercents,
+        address[] memory _distributionAddresses
     ) external onlyOwner {
         require(_token != address(0), "token cannot be zero");
         require(_initialPrice != 0, "price cannot be zero");
         require(_bBonusAmount != 0, "B bonus amount cannot be zero");
         require(_lBonusPeriod != 0, "L bonus period cannot be zero");
-        require(_percents.length == _wallets.length, "incorrect input arrays");
+        require(_distributionPercents.length == 5, "distributionPercents length must be == 5");
+        require(_distributionAddresses.length == 3, "distributionAddresses length must be == 3");
         uint256 sum;
-        for (uint256 i = 0; i < _percents.length; i++) {
-            require(_wallets[i] != address(0), "wallet cannot be == 0");
-            sum += _percents[i];
+        for (uint256 i = 0; i < _distributionPercents.length; i++) {
+            sum += _distributionPercents[i];
         }
         require(sum == percentBase, "percent sum must be == 100");
-
+        for (uint256 i = 0; i < _distributionAddresses.length; i++) {
+            require(_distributionAddresses[i] != address(0), "wallet cannot be == 0");
+        }
         bytes32 salt = keccak256(abi.encodePacked(allPools.length));
         bytes memory bytecode = abi.encodePacked(
             type(CarpeDiem).creationCode,
@@ -52,8 +54,8 @@ contract CarpediemFactory is Ownable {
                 _lBonusPeriod,
                 _bBonusMaxPercent,
                 _lBonusMaxPercent,
-                _percents,
-                _wallets
+                _distributionPercents,
+                _distributionAddresses
             )
         );
         address pool;
