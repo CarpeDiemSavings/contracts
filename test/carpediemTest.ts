@@ -72,7 +72,7 @@ async function fixture(_signers: Wallet[], _mockProvider: MockProvider) {
     const Token = await ethers.getContractFactory('Token');
     token = await Token.deploy(TOTALSUPPLY);
     await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
-    const poolAddress = await factory.getPool(token.address);
+    const poolAddress = await factory.allPools(0);
     const carpArtifacts = await artifacts.readArtifact("CarpeDiem");
     carp = new ethers.Contract(poolAddress, carpArtifacts.abi, ethers.provider);
 
@@ -101,10 +101,6 @@ describe('incorrect deployment', async() => {
     })
     it('shouldnt create pool with zero LBonus', async() => {
         await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, 0, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('L bonus period cannot be zero');
-    })
-    it('shouldnt create pool if pool with this token already exists', async() => {
-        factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('pool already exists');
     })
 
     it('shouldnt create pool with incorrect arrays length', async() => {
@@ -160,7 +156,7 @@ describe('test', async () => {
         it('should correct create pool through factory', async() => {
             const {factory ,carp} = await loadFixture(fixture);
 
-            const poolAddress = await factory.getPool(token.address);
+            const poolAddress = await factory.allPools(0);
             expect(poolAddress).to.not.be.equal(ZERO_ADDRESS);
             const aliceBalance = await token.balanceOf(alice.address);
 
@@ -212,6 +208,21 @@ describe('test', async () => {
 
         })
 
+        it('should create several identical pools', async() => {
+            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
+            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
+            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
+            const pool0 = await factory.allPools(0);
+            const pool1 = await factory.allPools(1);
+            const pool2 = await factory.allPools(2);
+            const pool3 = await factory.allPools(3);
+            expect(pool0).to.not.be.equal(ZERO_ADDRESS);
+            expect(pool1).to.not.be.equal(ZERO_ADDRESS);
+            expect(pool2).to.not.be.equal(ZERO_ADDRESS);
+            expect(pool3).to.not.be.equal(ZERO_ADDRESS);
+            await expect(factory.allPools(4)).to.be.reverted;
+        })
+
     })
 
     describe('deposit tests', async() => {
@@ -230,7 +241,7 @@ describe('test', async () => {
             ]
 
             await carp.connect(owner).setWallets(newWallets);
-            const walletsFromPool = await carp.getWallets();
+            const walletsFromPool = await carp.getDistributionAddresses();
             for (let i = 0; i < walletsFromPool; i++ ) {
                 expect(walletsFromPool[i]).to.be.equal(newWallets[i]);
             }
@@ -262,7 +273,7 @@ describe('test', async () => {
         })
 
         it('should correct deposit', async() => {
-            const poolAddress = await factory.getPool(token.address);
+            const poolAddress = await factory.allPools(0);
             expect(poolAddress).to.not.be.equal(ZERO_ADDRESS);
 
             const aliceAmount = ethers.utils.parseEther('1');

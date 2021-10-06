@@ -26,8 +26,8 @@ contract CarpeDiem is Ownable {
     uint256 public totalShares; // total shares with the bonuses in the pool
     uint256 public currentPrice; // current shares price
     uint256 public lambda;
-    uint16[] public penaltyPercents; // percents to distribute
-    address[] public wallets; // wallets for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
+    uint16[] public distributionPercents; // percents to distribute
+    address[] public distributionAddresses; // addresses for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
 
     uint256 private constant percentBase = 100;
     uint256 private constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
@@ -63,8 +63,8 @@ contract CarpeDiem is Ownable {
         uint256 _lBonusPeriod,
         uint256 _bBonusMaxPercent,
         uint256 _lBonusMaxPercent,
-        uint16[] memory _percents,
-        address[] memory _wallets
+        uint16[] memory _distributionPercents,
+        address[] memory _distributionAddresses
     ) {
         token = _token;
         lambda = 0;
@@ -73,27 +73,30 @@ contract CarpeDiem is Ownable {
         initialPrice = _initialPrice;
         bBonusAmount = _bBonusAmount;
         lBonusPeriod = _lBonusPeriod;
-        penaltyPercents = _percents;
+        distributionPercents = _distributionPercents;
         bBonusMaxPercent = _bBonusMaxPercent;
         lBonusMaxPercent = _lBonusMaxPercent;
-        wallets = _wallets;
+        distributionAddresses = _distributionAddresses;
     }
 
-    function getWallets() external view returns (address[] memory) {
-        return wallets;
+    function getDistributionAddresses() external view returns (address[] memory) {
+        return distributionAddresses;
     }
 
-    function getPercents() external view returns (uint16[] memory) {
-        return penaltyPercents;
+    function getDistributionPercents() external view returns (uint16[] memory) {
+        return distributionPercents;
     }
 
     function getUserStakes(address _user) external view returns (StakeInfo[] memory) {
         return stakes[_user];
     }
 
-    function setWallets(address[] calldata _newWallets) external onlyOwner {
-        require(_newWallets.length == wallets.length, "incorrect data");
-        wallets = _newWallets;
+    function setWallets(address[] calldata _newDistributionAddresses) external onlyOwner {
+        require(
+            _newDistributionAddresses.length == distributionAddresses.length, 
+            "incorrect data"
+        );
+        distributionAddresses = _newDistributionAddresses;
     }
 
     function deposit(uint256 _amount, uint256 _term) external {
@@ -174,7 +177,7 @@ contract CarpeDiem is Ownable {
                 (penalty *
                     MULTIPLIER *
                     MULTIPLIER *
-                    uint256(penaltyPercents[0])) /
+                    uint256(distributionPercents[0])) /
                 (percentBase * totalShares);
         }
         delete stakes[sender][_stakeId];
@@ -280,15 +283,14 @@ contract CarpeDiem is Ownable {
     function _distributePenalty(
         uint256 _penalty
     ) internal {
-        address[] memory poolWallets = wallets;
-        uint16[] memory poolPercents = penaltyPercents;
+        address[] memory poolAddresses = distributionAddresses;
+        uint16[] memory poolPercents = distributionPercents;
         uint256 base = percentBase;
         address poolToken = token;
-        for (uint256 i = 1; i < wallets.length; i++) {
-            // skip wallets[0]
+        for (uint256 i = 1; i < poolAddresses.length; i++) {
             if (poolPercents[i] > 0)
                 IERC20(poolToken).transfer(
-                    poolWallets[i],
+                    poolAddresses[i],
                     (_penalty * poolPercents[i]) / base
                 );
         }

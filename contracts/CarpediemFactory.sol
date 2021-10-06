@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./CarpeDiem.sol";
 
 contract CarpediemFactory is Ownable {
-    mapping(address => address) public getPool; // token address => pool address
 
     address[] public allPools;
 
@@ -31,7 +30,6 @@ contract CarpediemFactory is Ownable {
         uint16[] memory _percents,
         address[] memory _wallets
     ) external onlyOwner {
-        require(getPool[_token] == address(0), "pool already exists");
         require(_token != address(0), "token cannot be zero");
         require(_initialPrice != 0, "price cannot be zero");
         require(_bBonusAmount != 0, "B bonus amount cannot be zero");
@@ -44,7 +42,7 @@ contract CarpediemFactory is Ownable {
         }
         require(sum == percentBase, "percent sum must be == 100");
 
-        bytes32 salt = keccak256(abi.encodePacked(_token));
+        bytes32 salt = keccak256(abi.encodePacked(allPools.length));
         bytes memory bytecode = abi.encodePacked(
             type(CarpeDiem).creationCode,
             abi.encode(
@@ -63,7 +61,6 @@ contract CarpediemFactory is Ownable {
             pool := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
         CarpeDiem(pool).transferOwnership(msg.sender);
-        getPool[_token] = pool;
         allPools.push(pool);
         emit NewPool(
             _token,
