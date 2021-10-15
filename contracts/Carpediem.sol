@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // Created by Carpe Diem Savings and SFXDX
 
-contract CarpeDiem is Ownable {
+contract CarpeDiem {
     mapping(address => StakeInfo[]) public stakes; // user address => StakeInfo
 
     struct StakeInfo {
@@ -19,6 +19,7 @@ contract CarpeDiem is Ownable {
         uint256 assignedReward;
     }
 
+    Ownable public immutable fab; // fabric contract
     address public immutable token;
     uint256 public immutable initialPrice; // initial shares price
     uint256 public immutable bBonusAmount; // amount for maximum B bonus
@@ -61,26 +62,33 @@ contract CarpeDiem is Ownable {
     event NewPrice(uint256 oldPrice, uint256 newPrice);
 
     constructor(
+        address _fab,
         address _token,
-        uint256 _initialPrice,
-        uint256 _bBonusAmount,
-        uint256 _lBonusPeriod,
-        uint256 _bBonusMaxPercent,
-        uint256 _lBonusMaxPercent,
+        uint256[5] memory _params,
         uint16[] memory _distributionPercents,
         address[] memory _distributionAddresses
     ) {
+        fab = Ownable(_fab);
         token = _token;
         lambda = 0;
         totalShares = 0;
-        currentPrice = _initialPrice;
-        initialPrice = _initialPrice;
-        bBonusAmount = _bBonusAmount;
-        lBonusPeriod = _lBonusPeriod;
+        currentPrice = _params[0];
+        initialPrice = _params[0];
+        bBonusAmount = _params[1];
+        lBonusPeriod = _params[2];
+        bBonusMaxPercent = _params[3];
+        lBonusMaxPercent = _params[4];
         distributionPercents = _distributionPercents;
-        bBonusMaxPercent = _bBonusMaxPercent;
-        lBonusMaxPercent = _lBonusMaxPercent;
         distributionAddresses = _distributionAddresses;
+    }
+
+    function owner() public view virtual returns (address) {
+        return fab.owner();
+    }
+
+    modifier onlyOwner() {
+        require(fab.owner() == msg.sender, "Ownable: caller is not the owner");
+        _;
     }
 
     function getDistributionAddresses() external view returns (address[] memory) {
@@ -97,20 +105,21 @@ contract CarpeDiem is Ownable {
 
     function setDistributionAddresses(address[] calldata _newDistributionAddresses) external onlyOwner {
         require(
-            _newDistributionAddresses.length == 3, 
+            _newDistributionAddresses.length == 3,
             "distributionAddresses length must be == 3"
         );
         distributionAddresses = _newDistributionAddresses;
     }
 
     function deposit(uint256 _amount, uint256 _term) external {
-        address sender = _msgSender();
         require(_amount > 0, "deposit cannot be zero");
         require(_term > 0, "term cannot be zero");
-        uint256 shares = _buyShares(_amount, sender);
-        uint256 boostedShares = _getBoostedShares(shares, _term, _amount);
+        uint256 shares = _buyShares(_amount);
+        uint256 boostedShares = shares +
+            _getBonusB(shares, _amount) +
+            _getBonusL(shares, _term);
         totalShares += boostedShares;
-        stakes[sender].push(
+        stakes[msg.sender].push(
             StakeInfo(
                 _amount,
                 _term,
@@ -122,41 +131,38 @@ contract CarpeDiem is Ownable {
             )
         );
 
-        emit Deposit(sender, stakes[sender].length - 1, _amount, _term);
+        emit Deposit(msg.sender, stakes[msg.sender].length - 1, _amount, _term);
     }
 
     function upgradeStake(uint256 _stakeId, uint256 _amount) external {
-        address sender = _msgSender();
         require(_amount > 0, "deposit cannot be zero");
-        require(_stakeId < stakes[sender].length, "no such stake id");
-        uint256 stakeTerm = stakes[sender][_stakeId].term;
-        uint256 stakeTs = stakes[sender][_stakeId].ts;
+        require(_stakeId < stakes[msg.sender].length, "no such stake id");
+        uint256 stakeTerm = stakes[msg.sender][_stakeId].term;
+        uint256 stakeTs = stakes[msg.sender][_stakeId].ts;
         require(stakeTs > 0, "stake was deleted");
         require(block.timestamp < stakeTerm + stakeTs, "stake matured");
-        uint256 stakeDeposit = stakes[sender][_stakeId].amount;
-        uint256 extraShares = _buyShares(_amount, sender);
-        uint256 shares = stakes[sender][_stakeId].shares;
-        uint256 boostedSharesBefore = stakes[sender][_stakeId]
-            .sharesWithBonuses;
-        uint256 boostedShares = _getBoostedShares(
-            shares + extraShares,
-            stakeTs + stakeTerm - block.timestamp,
-            stakeDeposit + _amount
-        );
+        uint256 stakeDeposit = stakes[msg.sender][_stakeId].amount;
+        uint256 extraShares = _buyShares(_amount);
+        uint256 shares = stakes[msg.sender][_stakeId].shares;
 
-        totalShares += boostedShares - boostedSharesBefore;
-        stakes[sender][_stakeId] = StakeInfo(
+        uint256 boostedShares = shares + extraShares +
+            _getBonusB(shares + extraShares, stakeDeposit + _amount) +
+            _getBonusL(extraShares, stakeTs + stakeTerm - block.timestamp);
+
+        totalShares += boostedShares - stakes[msg.sender][_stakeId].sharesWithBonuses;
+        // update stake info
+        stakes[msg.sender][_stakeId] = StakeInfo(
             stakeDeposit + _amount,
             stakeTs + stakeTerm - block.timestamp,
             block.timestamp,
             shares + extraShares,
             boostedShares,
             lambda,
-            getReward(sender, _stakeId)
+            getReward(msg.sender, _stakeId)
         );
 
         emit UpgradedStake(
-            sender,
+            msg.sender,
             _stakeId,
             _amount,
             stakeTs + stakeTerm - block.timestamp
@@ -164,16 +170,15 @@ contract CarpeDiem is Ownable {
     }
 
     function withdraw(uint256 _stakeId) external {
-        address sender = _msgSender();
-        require(_stakeId < stakes[sender].length, "no such stake id");
-        uint256 deposit = stakes[sender][_stakeId].amount;
-        require(deposit > 0, "stake was deleted");
-        uint256 reward = getReward(sender, _stakeId);
-        uint256 penalty = _getPenalty(sender, deposit, reward, _stakeId);
-        uint256 userShares = stakes[sender][_stakeId].shares;
-        _changeSharesPrice(deposit + reward - penalty, userShares);
+        require(_stakeId < stakes[msg.sender].length, "no such stake id");
+        uint256 depositAmount = stakes[msg.sender][_stakeId].amount;
+        require(depositAmount > 0, "stake was deleted");
+        uint256 reward = getReward(msg.sender, _stakeId);
+        uint256 penalty = _getPenalty(msg.sender, depositAmount, reward, _stakeId);
+        uint256 userShares = stakes[msg.sender][_stakeId].shares;
+        _changeSharesPrice(depositAmount + reward - penalty, userShares);
         _distributePenalty(penalty);
-        totalShares -= stakes[sender][_stakeId].sharesWithBonuses;
+        totalShares -= stakes[msg.sender][_stakeId].sharesWithBonuses;
         if (totalShares == 0) {
             lambda = 0;
         } else {
@@ -184,9 +189,9 @@ contract CarpeDiem is Ownable {
                     uint256(distributionPercents[4])) /
                 (percentBase * totalShares);
         }
-        delete stakes[sender][_stakeId];
-        IERC20(token).transfer(sender, deposit + reward - penalty);
-        emit Withdraw(sender, _stakeId, deposit, reward, penalty);
+        delete stakes[msg.sender][_stakeId];
+        IERC20(token).transfer(msg.sender, depositAmount + reward - penalty);
+        emit Withdraw(msg.sender, _stakeId, depositAmount, reward, penalty);
     }
 
     function getPenalty(address _user, uint256 _stakeId)
@@ -194,9 +199,9 @@ contract CarpeDiem is Ownable {
         view
         returns (uint256)
     {
-        uint256 deposit = stakes[_user][_stakeId].amount;
+        uint256 depositAmount = stakes[_user][_stakeId].amount;
         uint256 reward = getReward(_user, _stakeId);
-        return _getPenalty(_user, deposit, reward, _stakeId);
+        return _getPenalty(_user, depositAmount, reward, _stakeId);
     }
 
     function getReward(address _user, uint256 _stakeId)
@@ -217,25 +222,13 @@ contract CarpeDiem is Ownable {
     }
 
     // buys shares for user for current share price
-    function _buyShares(uint256 _amount, address _user)
+    function _buyShares(uint256 _amount)
         internal
         returns (uint256)
     {
-        IERC20(token).transferFrom(_user, address(this), _amount); // take tokens
+        IERC20(token).transferFrom(msg.sender, address(this), _amount); // take tokens
         uint256 sharesToBuy = (_amount * MULTIPLIER) / currentPrice; // calculate corresponding amount of shares
         return sharesToBuy * MULTIPLIER;
-    }
-
-    // boost user shares for both deposit and extraDeposit
-    function _getBoostedShares(
-        uint256 _shares,
-        uint256 _term,
-        uint256 _deposit
-    ) internal view returns (uint256) {
-        return
-            _shares +
-            _getBonusB(_shares, _deposit) +
-            _getBonusL(_shares, _term);
     }
 
     function _getBonusB(uint256 _shares, uint256 _deposit)

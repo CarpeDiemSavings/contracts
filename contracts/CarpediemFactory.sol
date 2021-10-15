@@ -2,7 +2,7 @@
 pragma solidity 0.8.7;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./CarpeDiem.sol";
+import "./Carpediem.sol";
 
 // Created by Carpe Diem Savings and SFXDX
 
@@ -46,29 +46,19 @@ contract CarpediemFactory is Ownable {
         for (uint256 i = 0; i < _distributionAddresses.length; i++) {
             require(_distributionAddresses[i] != address(0), "wallet cannot be == 0");
         }
-        bytes32 salt = keccak256(abi.encodePacked(allPools.length));
-        bytes memory bytecode = abi.encodePacked(
-            type(CarpeDiem).creationCode,
-            abi.encode(
+        CarpeDiem pool = new CarpeDiem(address(this),
                 _token,
-                _initialPrice,
+                [_initialPrice,
                 _bBonusAmount,
                 _lBonusPeriod,
                 _bBonusMaxPercent,
-                _lBonusMaxPercent,
+                _lBonusMaxPercent],
                 _distributionPercents,
-                _distributionAddresses
-            )
-        );
-        address pool;
-        assembly {
-            pool := create2(0, add(bytecode, 32), mload(bytecode), salt)
-        }
-        CarpeDiem(pool).transferOwnership(msg.sender);
-        allPools.push(pool);
+                _distributionAddresses);
+        allPools.push(address(pool));
         emit NewPool(
             _token,
-            pool,
+            address(pool),
             _initialPrice,
             _bBonusAmount,
             _lBonusPeriod,

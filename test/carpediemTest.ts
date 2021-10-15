@@ -172,7 +172,7 @@ describe('test', async () => {
             const factoryOwner = await factory.owner();
             const carpOwner = await carp.owner();
 
-            expect(factoryOwner).to.be.equal(carpOwner);            
+            expect(factoryOwner).to.be.equal(carpOwner);
             const poolLambda = await carp.lambda();
             const poolTotalShares = await carp.totalShares();
             const poolCurrentPrice = await carp.currentPrice();
@@ -191,7 +191,7 @@ describe('test', async () => {
             // const eventBBonusMaxPercent = receipt.events[receipt.events.length - 1].args.bBonusMaxPercent;
             // const eventLBonusMaxPercent = receipt.events[receipt.events.length - 1].args.lBonusMaxPercent;
 
-            
+
             expect(poolToken).to.be.equal(token.address);
             expect(poolLambda).to.be.equal(0);
             expect(poolTotalShares).to.be.equal(0);
@@ -201,7 +201,7 @@ describe('test', async () => {
             expect(poolLBonusPeriod).to.be.equal(LBonus);
             expect(poollBonusMaxPercent).to.be.equal(LBonusMaxPercent);
             expect(poolbBonusMaxPercent).to.be.equal(BBonusMaxPercent);
-            
+
             // expect(eventName).to.be.equal("NewPool");
             // expect(eventToken).to.be.equal(token.address);
             // expect(eventPoolAddress).to.be.equal(poolAddress);
@@ -233,10 +233,9 @@ describe('test', async () => {
 
     describe('deposit tests', async() => {
         beforeEach('create pool', async() => {
-            await loadFixture(fixture);            
-            
+            await loadFixture(fixture);
         })
-        
+
         it('should correct set new wallets', async() => {
             const newWallets = [
                 accounts[12].address,
@@ -817,6 +816,7 @@ describe('test', async () => {
                 })
 
                 it('should correct upgrade stake', async() => {
+                    const stakeInfoBefore = await carp.stakes(alice.address, 0);
                     const termBeforeAliceExtra = 0.1*YEAR;
                     await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
                     const extraAmount = ethers.utils.parseEther('10');
@@ -825,7 +825,7 @@ describe('test', async () => {
                     const receipt = await tx.wait();
                     const block = await receipt.events[0].getBlock();
                     const timestamp = block.timestamp;
-                    const stakeInfo = await carp.stakes(alice.address, 0);;
+                    const stakeInfo = await carp.stakes(alice.address, 0);
                     const userShares = stakeInfo.shares;
                     const userSharesWithBonuses = stakeInfo.sharesWithBonuses;
                     const userLastLambda = stakeInfo.lastLambda;
@@ -843,9 +843,8 @@ describe('test', async () => {
                     const eventTerm = receipt.events[receipt.events.length - 1].args.term;
 
                     const shares = extraAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE).add(s_alice);
-                    const sharesWithBonuses = shares.add(calculateBBonus(shares, aliceAmount.add(extraAmount))).add(calculateLBonus(shares, stakeTs.add(stakeTerm).sub(timestamp)));
+                    const sharesWithBonuses = shares.add(calculateBBonus(shares, aliceAmount.add(extraAmount))).add(calculateLBonus(shares.sub(s_alice), stakeTs.add(stakeTerm).sub(timestamp)));
 
-                    
                     expect(userShares).to.be.equal(shares);
                     expect(userSharesWithBonuses).to.be.equal(sharesWithBonuses);
                     expect(userLastLambda).to.be.equal(lastLambda);
