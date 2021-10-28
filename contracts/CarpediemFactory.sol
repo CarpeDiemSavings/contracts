@@ -7,7 +7,6 @@ import "./Carpediem.sol";
 // Created by Carpe Diem Savings and SFXDX
 
 contract CarpediemFactory is Ownable {
-
     address[] public allPools;
 
     uint256 constant percentBase = 100;
@@ -36,25 +35,38 @@ contract CarpediemFactory is Ownable {
         require(_initialPrice != 0, "price cannot be zero");
         require(_bBonusAmount != 0, "B bonus amount cannot be zero");
         require(_lBonusPeriod != 0, "L bonus period cannot be zero");
-        require(_distributionPercents.length == 5, "distributionPercents length must be == 5");
-        require(_distributionAddresses.length == 3, "distributionAddresses length must be == 3");
+        require(
+            _distributionPercents.length == 5,
+            "distributionPercents length must be == 5"
+        );
+        require(
+            _distributionAddresses.length == 3,
+            "distributionAddresses length must be == 3"
+        );
         uint256 sum;
         for (uint256 i = 0; i < _distributionPercents.length; i++) {
             sum += _distributionPercents[i];
         }
         require(sum == percentBase, "percent sum must be == 100");
         for (uint256 i = 0; i < _distributionAddresses.length; i++) {
-            require(_distributionAddresses[i] != address(0), "wallet cannot be == 0");
+            require(
+                _distributionAddresses[i] != address(0),
+                "wallet cannot be == 0"
+            );
         }
-        CarpeDiem pool = new CarpeDiem(address(this),
-                _token,
-                [_initialPrice,
+        CarpeDiem pool = new CarpeDiem(
+            address(this),
+            _token,
+            [
+                _initialPrice,
                 _bBonusAmount,
                 _lBonusPeriod,
                 _bBonusMaxPercent,
-                _lBonusMaxPercent],
-                _distributionPercents,
-                _distributionAddresses);
+                _lBonusMaxPercent
+            ],
+            _distributionPercents,
+            _distributionAddresses
+        );
         allPools.push(address(pool));
         emit NewPool(
             _token,

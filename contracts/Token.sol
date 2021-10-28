@@ -1,11 +1,9 @@
 pragma solidity 0.8.7;
 
-import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract Token is ERC20{
-    
+contract Token is ERC20 {
     constructor(uint256 _amount) ERC20("Token", "TKN") {
         _mint(msg.sender, _amount);
     }
-
 }

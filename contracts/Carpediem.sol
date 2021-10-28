@@ -91,7 +91,11 @@ contract CarpeDiem {
         _;
     }
 
-    function getDistributionAddresses() external view returns (address[] memory) {
+    function getDistributionAddresses()
+        external
+        view
+        returns (address[] memory)
+    {
         return distributionAddresses;
     }
 
@@ -99,11 +103,17 @@ contract CarpeDiem {
         return distributionPercents;
     }
 
-    function getUserStakes(address _user) external view returns (StakeInfo[] memory) {
+    function getUserStakes(address _user)
+        external
+        view
+        returns (StakeInfo[] memory)
+    {
         return stakes[_user];
     }
 
-    function setDistributionAddresses(address[] calldata _newDistributionAddresses) external onlyOwner {
+    function setDistributionAddresses(
+        address[] calldata _newDistributionAddresses
+    ) external onlyOwner {
         require(
             _newDistributionAddresses.length == 3,
             "distributionAddresses length must be == 3"
@@ -145,11 +155,14 @@ contract CarpeDiem {
         uint256 extraShares = _buyShares(_amount);
         uint256 shares = stakes[msg.sender][_stakeId].shares;
 
-        uint256 boostedShares = shares + extraShares +
+        uint256 boostedShares = shares +
+            extraShares +
             _getBonusB(shares + extraShares, stakeDeposit + _amount) +
             _getBonusL(extraShares, stakeTs + stakeTerm - block.timestamp);
 
-        totalShares += boostedShares - stakes[msg.sender][_stakeId].sharesWithBonuses;
+        totalShares +=
+            boostedShares -
+            stakes[msg.sender][_stakeId].sharesWithBonuses;
         // update stake info
         stakes[msg.sender][_stakeId] = StakeInfo(
             stakeDeposit + _amount,
@@ -174,7 +187,12 @@ contract CarpeDiem {
         uint256 depositAmount = stakes[msg.sender][_stakeId].amount;
         require(depositAmount > 0, "stake was deleted");
         uint256 reward = getReward(msg.sender, _stakeId);
-        uint256 penalty = _getPenalty(msg.sender, depositAmount, reward, _stakeId);
+        uint256 penalty = _getPenalty(
+            msg.sender,
+            depositAmount,
+            reward,
+            _stakeId
+        );
         uint256 userShares = stakes[msg.sender][_stakeId].shares;
         _changeSharesPrice(depositAmount + reward - penalty, userShares);
         _distributePenalty(penalty);
@@ -222,10 +240,7 @@ contract CarpeDiem {
     }
 
     // buys shares for user for current share price
-    function _buyShares(uint256 _amount)
-        internal
-        returns (uint256)
-    {
+    function _buyShares(uint256 _amount) internal returns (uint256) {
         IERC20(token).transferFrom(msg.sender, address(this), _amount); // take tokens
         uint256 sharesToBuy = (_amount * MULTIPLIER) / currentPrice; // calculate corresponding amount of shares
         return sharesToBuy * MULTIPLIER;
@@ -252,7 +267,8 @@ contract CarpeDiem {
         uint256 poolLBonus = lBonusPeriod;
         if (_term < poolLBonus)
             return
-                (_shares * lBonusMaxPercent * _term) / (poolLBonus * percentBase);
+                (_shares * lBonusMaxPercent * _term) /
+                (poolLBonus * percentBase);
         return (lBonusMaxPercent * _shares) / percentBase;
     }
 
@@ -268,18 +284,15 @@ contract CarpeDiem {
             if (stakeTs + term + FREE_LATE_PERIOD > block.timestamp) return 0;
             uint256 lateWeeks = (block.timestamp - (stakeTs + term)) / WEEK;
             if (lateWeeks >= 50) return _reward;
-            return (_reward *
-                PENALTY_PERCENT_PER_WEEK *
-                lateWeeks) / percentBase;
+            return
+                (_reward * PENALTY_PERCENT_PER_WEEK * lateWeeks) / percentBase;
         }
         return
             ((_deposit + _reward) * (term - (block.timestamp - stakeTs))) /
             term;
     }
 
-    function _distributePenalty(
-        uint256 _penalty
-    ) internal {
+    function _distributePenalty(uint256 _penalty) internal {
         address[] memory addresses = distributionAddresses;
         uint16[] memory poolPercents = distributionPercents;
         uint256 base = percentBase;
@@ -291,11 +304,11 @@ contract CarpeDiem {
                     (_penalty * poolPercents[i]) / base
                 );
         }
-        if (poolPercents[3] > 0) IERC20(poolToken).transfer(
-                    DEAD_WALLET,
-                    (_penalty * poolPercents[3]) / base
-                );
-
+        if (poolPercents[3] > 0)
+            IERC20(poolToken).transfer(
+                DEAD_WALLET,
+                (_penalty * poolPercents[3]) / base
+            );
     }
 
     function _changeSharesPrice(uint256 _profit, uint256 _shares) private {

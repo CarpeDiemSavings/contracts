@@ -1,12 +1,15 @@
 {
   "name": "carpediem",
   "version": "1.0.0",
-  "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
+  "description": "",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "coverage": "npx hardhat coverage",
+    "build": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "prettier": "prettier --write contracts/*.sol",
+    "lint": "solhint contracts/*.sol",
+    "deploy": "npx hardhat deploy --network rinkeby",
+    "verify": "npx hardhat verify --constructor-args scripts/arguments.ts --network rinkeby"
   },
   "author": "",
   "license": "ISC",
@@ -21,29 +24,32 @@
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.2",
-    "@nomiclabs/hardhat-etherscan": "^2.1.2",
+    "@nomiclabs/hardhat-etherscan": "^2.1.6",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
-    "@openzeppelin/test-helpers": "^0.5.10",
-    "@types/chai": "^4.2.16",
-    "@types/mocha": "^8.2.2",
+    "@typechain/ethers-v5": "^7.1.2",
+    "@typechain/hardhat": "^2.3.0",
+    "@types/chai": "^4.2.22",
+    "@types/mocha": "^9.0.0",
+    "bignumber.js": "^9.0.1",
     "chai": "^4.3.4",
-    "decimal.js": "^10.2.1",
-    "dotenv": "^8.2.0",
-    "ethereum-waffle": "^3.3.0",
-    "ethers": "^5.1.3",
-    "hardhat": "^2.2.0",
-    "hardhat-deploy": "^0.7.10",
-    "hardhat-deploy-ethers": "^0.3.0-beta.8",
+    "chai-as-promised": "^7.1.1",
+    "chai-bignumber": "^3.0.0",
+    "decimal.js": "^10.3.1",
+    "dotenv": "^10.0.0",
+    "ethereum-waffle": "^3.4.0",
+    "ethers": "^5.4.7",
+    "hardhat": "^2.6.4",
+    "hardhat-deploy": "^0.9.3",
+    "hardhat-deploy-ethers": "^0.3.0-beta.11",
     "hardhat-gas-reporter": "^1.0.4",
     "mocha": "^7.2.0",
-    "prettier": "^2.2.1",
-    "prettier-plugin-solidity": "*",
-    "solhint": "^3.3.4",
+    "prettier": "^2.4.1",
+    "prettier-plugin-solidity": "^1.0.0-beta.18",
+    "solhint": "^3.3.6",
     "solhint-plugin-prettier": "^0.0.5",
-    "solidity-coverage": "^0.7.16",
-    "truffle-plugin-verify": "^0.5.14",
-    "ts-node": "10.2.1",
-    "typescript": "^4.2.4"
-  },
-  "description": ""
+    "solidity-coverage": "^0.7.17",
+    "ts-node": "^10.2.1",
+    "typechain": "^5.1.2",
+    "typescript": "^4.4.3"
+  }
 }
