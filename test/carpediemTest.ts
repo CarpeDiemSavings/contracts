@@ -140,7 +140,7 @@ describe('incorrect deployment', async() => {
 })
 
 describe('test', async () => {
-   
+
     wallets = [
         owner.address,
         charity.address,
@@ -210,7 +210,7 @@ describe('test', async () => {
             // expect(eventInitialPrice).to.be.equal(INITIAL_PRICE);
             // expect(eventBBonusMaxPercent).to.be.equal(BBonusMaxPercent);
             // expect(eventLBonusMaxPercent).to.be.equal(LBonusMaxPercent);
-    
+
 
         })
 
@@ -285,11 +285,10 @@ describe('test', async () => {
             await token.connect(alice).approve(carp.address, aliceAmount);
             const tx = await carp.connect(alice).deposit(aliceAmount, termAlice, {gasLimit: 1e6});
             const receipt = await tx.wait();
-            const stakeInfo = await carp.stakes(alice.address, 0);;
+            const stakeInfo = await carp.stakes(alice.address, 0);
             const shares = stakeInfo.shares;
             const sharesWithBonuses = stakeInfo.sharesWithBonuses;
             const lastLambda = stakeInfo.lastLambda;
-            const assignedReward = stakeInfo.assignedReward;
             const amount = stakeInfo.amount;
             const term = stakeInfo.term;
 
@@ -302,7 +301,7 @@ describe('test', async () => {
             const eventDepositor = receipt.events[receipt.events.length - 1].args.depositor;
             const eventAmount = receipt.events[receipt.events.length - 1].args.amount;
             const eventTerm = receipt.events[receipt.events.length - 1].args.term;
-    
+
 
             const s_alice = aliceAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
             const S_alice = s_alice.add(calculateBBonus(s_alice, aliceAmount)).add(calculateLBonus(s_alice, termAlice));
@@ -310,7 +309,6 @@ describe('test', async () => {
             expect(amount).to.be.equal(aliceAmount);
             expect(sharesWithBonuses).to.be.equal(S_alice);
             expect(lastLambda).to.be.equal(0);
-            expect(assignedReward).to.be.equal(0);
             expect(term).to.be.equal(termAlice);
 
             expect(poolLambda).to.be.equal(0);
@@ -393,7 +391,7 @@ describe('test', async () => {
             const withdrawBlock = await receiptWithdraw.events[receiptWithdraw.events.length - 1].getBlock();
             const timestampWithdraw = withdrawBlock.timestamp;
             const penalty = amountWithdrawer.mul(termWithdrawer.sub(timestampWithdraw).add(timestampDeposit)).div(termWithdrawer).mul(INTEREST_PERCENT).div(HUN);
-            await ethers.provider.send('evm_increaseTime', [termRaiser]); 
+            await ethers.provider.send('evm_increaseTime', [termRaiser]);
 
             await carp.connect(raiser).withdraw(0);
             const raiserIncome = penalty.add(amountRaiser);
@@ -439,7 +437,7 @@ describe('test', async () => {
         })
         it('shouldnt upgradeStake if there is such id', async() => {
             const termBeforeAliceExtra = 0.1*YEAR;
-            await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+            await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]);
             const extraAmount = ethers.utils.parseEther('10');
             await expect(carp.connect(alice).upgradeStake(extraAmount, 1)).to.be.revertedWith('no such stake id');
         })
@@ -476,8 +474,8 @@ describe('test', async () => {
 
             it('should correct show users penalty', async() => {
                 const bobBalanceBefore = await token.balanceOf(bob.address);
-                const stakeInfo = await carp.stakes(bob.address, 0);                  
-                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
+                const stakeInfo = await carp.stakes(bob.address, 0);
+                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]);
                 const penalty = await carp.getPenalty(bob.address, 0);
                 const stakeTs = stakeInfo.ts;
 
@@ -488,14 +486,14 @@ describe('test', async () => {
             })
 
             it('shouldnt withdraw if already withdrawn', async() => {
-                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
+                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]);
                 await carp.connect(bob).withdraw(0);
                 await expect(carp.connect(bob).withdraw(0)).to.be.revertedWith('stake was deleted');
 
             })
 
             it('shouldnt withdraw unexisting stake', async() => {
-                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
+                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]);
                 await expect(carp.connect(bob).withdraw(1)).to.be.revertedWith('no such stake id');
 
             })
@@ -513,7 +511,7 @@ describe('test', async () => {
                 expect(communityBalanceBefore).to.be.equal(0);
                 expect(burnBalanceBefore).to.be.equal(0);
                 expect(contractBalanceBefore).to.be.equal(aliceAmount.add(bobAmount).add(charlieAmount));
-                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
+                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]);
                 const tx = await carp.connect(bob).withdraw(0);
                 const receipt = await tx.wait();
                 const bobBalanceAfter = await token.balanceOf(bob.address);
@@ -530,7 +528,7 @@ describe('test', async () => {
                 const poolTotalShares = await carp.totalShares();
                 const poolCurrentPrice = await carp.currentPrice();
                 const poolInitialPrice = await carp.initialPrice();
-                
+
 
                 const eventName = receipt.events[receipt.events.length - 1].event;
                 const eventWho = receipt.events[receipt.events.length - 1].args.who;
@@ -550,7 +548,7 @@ describe('test', async () => {
                 expect(poolTotalShares).to.be.equal(totalShares);
                 expect(poolCurrentPrice).to.be.equal(INITIAL_PRICE);
                 expect(poolInitialPrice).to.be.equal(INITIAL_PRICE);
-                
+
                 expect(bobBalanceAfter.sub(bobBalanceBefore)).to.be.equal(bobAmount.sub(totalPenalty));
                 expect(charityBalanceAfter.sub(charityBalanceBefore)).to.be.equal(charityPenalty);
                 expect(communityBalanceAfter.sub(communityBalanceBefore)).to.be.equal(communityPenalty);
@@ -564,7 +562,7 @@ describe('test', async () => {
 
                 expect(aliceReward.div(TEN)).to.be.equal(penaltyToPool.mul(S_alice).div(totalShares).div(TEN));
                 expect(charlieReward.div(TEN)).to.be.equal(penaltyToPool.mul(S_charlie).div(totalShares).div(TEN));
-                expect(bobReward.div(TEN)).to.be.equal(0); 
+                expect(bobReward.div(TEN)).to.be.equal(0);
 
                 expect(eventName).to.be.equal('Withdraw');
                 expect(eventWho).to.be.equal(bob.address);
@@ -582,7 +580,7 @@ describe('test', async () => {
                 let communityBalanceBefore = await token.balanceOf(community.address);
                 let ownerBalanceBefore = await token.balanceOf(owner.address);
                 let burnBalanceBefore = await token.balanceOf(DEAD_WALLET);
-                await ethers.provider.send('evm_increaseTime', [+termBob.toString()]); 
+                await ethers.provider.send('evm_increaseTime', [+termBob.toString()]);
                 const tx = await carp.connect(bob).withdraw(0);
                 const receipt = await tx.wait();
                 const bobBalanceAfter = await token.balanceOf(bob.address);
@@ -606,7 +604,7 @@ describe('test', async () => {
                 expect(poolTotalShares).to.be.equal(totalShares);
                 expect(poolCurrentPrice).to.be.equal(INITIAL_PRICE);
                 expect(poolInitialPrice).to.be.equal(INITIAL_PRICE);
-                
+
                 expect(bobBalanceAfter.sub(bobBalanceBefore)).to.be.equal(bobAmount);
                 expect(charityBalanceAfter.sub(charityBalanceBefore)).to.be.equal(0);
                 expect(communityBalanceAfter.sub(communityBalanceBefore)).to.be.equal(0);
@@ -619,20 +617,20 @@ describe('test', async () => {
 
                 expect(aliceReward).to.be.equal(0);
                 expect(charlieReward).to.be.equal(0);
-                expect(bobReward).to.be.equal(0); 
+                expect(bobReward).to.be.equal(0);
 
             })
 
             it('shouldnt give darwin reward for bobs early withdraw if darwin came after ', async() => {
-                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]); 
+                await ethers.provider.send('evm_increaseTime', [1.5*YEAR]);
                 await carp.connect(bob).withdraw(0);
                 const darwinAmount = ethers.utils.parseEther('1');
                 const termDarwin = YEAR;
-                await ethers.provider.send('evm_increaseTime', [termDarwin]); 
+                await ethers.provider.send('evm_increaseTime', [termDarwin]);
                 await token.connect(darwin).approve(carp.address, darwinAmount);
                 await carp.connect(darwin).deposit(darwinAmount, termDarwin);
                 const darwinReward = await carp.getReward(darwin.address, 0);
-                expect(darwinReward.div(TEN)).to.be.equal(0); 
+                expect(darwinReward.div(TEN)).to.be.equal(0);
             })
 
             it('should give darwin reward if bob early withdraws, darwin came after and charlie early withdraw', async() => {
@@ -647,15 +645,15 @@ describe('test', async () => {
                 expect(communityBalanceBefore).to.be.equal(0);
                 expect(burnBalanceBefore).to.be.equal(0);
                 const termBeforeBobWithdraw = 1.5*YEAR;
-                await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]); 
+                await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]);
                 const tx = await carp.connect(bob).withdraw(0);
-                
+
                 const receipt = await tx.wait();
                 const block = await receipt.events[0].getBlock();
                 const ts = BigNumber.from(block.timestamp);
                 const totalPenalty = bobAmount.mul(termBob.sub(ts).add(stakeTs)).div(termBob);
                 const penaltyToPoolBefore = totalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
-                
+
 
                 let charityBalanceAfter = await token.balanceOf(charity.address);
                 let communityBalanceAfter = await token.balanceOf(community.address);
@@ -663,7 +661,7 @@ describe('test', async () => {
                 let burnBalanceAfter = await token.balanceOf(DEAD_WALLET);
 
                 const totalShares = S_alice.add(S_charlie);
-                
+
 
                 const darwinAmount = ethers.utils.parseEther('1');
                 const termDarwin = YEAR;
@@ -673,10 +671,10 @@ describe('test', async () => {
 
                 const s_darwin = darwinAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
                 const S_darwin = s_darwin.add(calculateBBonus(s_darwin, darwinAmount)).add(calculateLBonus(s_darwin, termDarwin));
-                
+
 
                 const termBeforeCharlieWithdraw = 1*YEAR;
-                await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]); 
+                await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]);
 
 
                 const charlieBalanceBefore = await token.balanceOf(charlie.address);
@@ -715,11 +713,11 @@ describe('test', async () => {
                     penaltyToPoolBefore.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(totalShares)).add(
                     charliePenaltyToPool.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(charlieTotalShares)
                 ));
-                    
+
 
                 expect(poolTotalSharesAfter).to.be.equal(charlieTotalShares);
                 expect(poolInitialPriceAfter).to.be.equal(INITIAL_PRICE);
-                
+
                 expect(charlieCharityBalanceAfter.sub(charityBalanceAfter)).to.be.equal(charlieCharityPenalty);
                 expect(charlieCommunityBalanceAfter.sub(communityBalanceAfter)).to.be.equal(charlieCommunityPenalty);
                 expect(charlieOwnerBalanceAfter.sub(ownerBalanceAfter)).to.be.equal(charlieOwnerPenalty);
@@ -736,8 +734,8 @@ describe('test', async () => {
                     ));
                 expect(charlieRewardBefore.div(TEN)).to.be.equal(penaltyToPoolBefore.mul(S_charlie).div(totalShares).div(TEN));
                 expect(darwinReward.div(HUN)).to.be.equal(charliePenaltyToPool.mul(S_darwin).div(charlieTotalShares).div(HUN));
-                expect(bobReward.div(TEN)).to.be.equal(0); 
-                expect(charlieReward.div(TEN)).to.be.equal(0); 
+                expect(bobReward.div(TEN)).to.be.equal(0);
+                expect(charlieReward.div(TEN)).to.be.equal(0);
 
             })
 
@@ -746,9 +744,9 @@ describe('test', async () => {
                 const stakeTs = stakeInfo.ts;
 
                 const termBeforeBobWithdraw = 1.5*YEAR;
-                await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]); 
+                await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]);
                 const tx = await carp.connect(bob).withdraw(0);
-                
+
                 const receipt = await tx.wait();
                 const block = await receipt.events[0].getBlock();
                 const ts = BigNumber.from(block.timestamp);
@@ -756,7 +754,7 @@ describe('test', async () => {
                 const penaltyToPoolBefore = totalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
                 const termBeforeCharlieWithdraw = 2.5*YEAR;
 
-                await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]); 
+                await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]);
 
                 const totalShares = S_charlie.add(S_alice);
 
@@ -778,13 +776,13 @@ describe('test', async () => {
                 let penaltyToPool: any;
 
                 beforeEach('bob replenishes the pool', async() => {
-                    await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]); 
+                    await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]);
                     const stakeInfo = await carp.stakes(bob.address, 0);;
-    
+
                     const tx = await carp.connect(bob).withdraw(0);
                     totalShares = S_alice.add(S_charlie);
                     const stakeTs = stakeInfo.ts;
-    
+
                     const receipt = await tx.wait();
                     const block = await receipt.events[0].getBlock();
                     const ts = BigNumber.from(block.timestamp);
@@ -792,23 +790,23 @@ describe('test', async () => {
 
                     penaltyToPool = totalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
                     lastLambda = penaltyToPool.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(totalShares);
-    
+
                 })
 
                 it('shouldnt upgrade stake if extra deposit is zero', async() => {
                     const termBeforeAliceExtra = 0.1*YEAR;
-                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]);
                     await expect(carp.connect(alice).upgradeStake(0, 0)).to.be.revertedWith('deposit cannot be zero');
                 })
                 it('shouldnt upgrade stake if stake matured', async() => {
                     const termBeforeAliceExtra = 2 * YEAR;
-                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]);
                     const extraAmount = ethers.utils.parseEther('10');
                     await expect(carp.connect(alice).upgradeStake(0, extraAmount)).to.be.revertedWith('stake matured');
                 })
                 it('shouldnt upgrade stake if stake was deleted (withdraw)', async() => {
                     const termBeforeAliceExtra = 2 * YEAR;
-                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]);
                     const extraAmount = ethers.utils.parseEther('10');
                     await carp.connect(alice).withdraw(0);
 
@@ -818,7 +816,7 @@ describe('test', async () => {
                 it('should correct upgrade stake', async() => {
                     const stakeInfoBefore = await carp.stakes(alice.address, 0);
                     const termBeforeAliceExtra = 0.1*YEAR;
-                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]); 
+                    await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]);
                     const extraAmount = ethers.utils.parseEther('10');
                     await token.connect(alice).approve(carp.address, extraAmount);
                     const tx = await carp.connect(alice).upgradeStake(0, extraAmount);
@@ -829,7 +827,6 @@ describe('test', async () => {
                     const userShares = stakeInfo.shares;
                     const userSharesWithBonuses = stakeInfo.sharesWithBonuses;
                     const userLastLambda = stakeInfo.lastLambda;
-                    const userAssignedReward = stakeInfo.assignedReward;
 
                     const stakeAmount = stakeInfo.amount;
                     const stakeTerm = stakeInfo.term;
@@ -848,7 +845,6 @@ describe('test', async () => {
                     expect(userShares).to.be.equal(shares);
                     expect(userSharesWithBonuses).to.be.equal(sharesWithBonuses);
                     expect(userLastLambda).to.be.equal(lastLambda);
-                    expect(userAssignedReward.div(HUN)).to.be.equal(penaltyToPool.mul(S_alice).div(totalShares).div(HUN));
                     expect(stakeAmount).to.be.equal(aliceAmount.add(extraAmount));
                     expect(stakeTerm).to.be.equal(stakeTs.add(stakeTerm).sub(timestamp));
                     expect(stakeTs).to.be.equal(timestamp);
@@ -864,9 +860,9 @@ describe('test', async () => {
                     it('should correct calculate penalty if claimed late ', async() => {
 
                         const lateWeeks = 2;
-                        const bigLateWeeks = BigNumber.from(lateWeeks); 
+                        const bigLateWeeks = BigNumber.from(lateWeeks);
                         const termBeforeCharlieWithdraw = 3.5*YEAR + lateWeeks*WEEK;
-                        await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]); 
+                        await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]);
                         const charlieBalanceBefore = await token.balanceOf(charlie.address);
                         const tx = await carp.connect(charlie).withdraw(0);
                         const charlieBalanceAfter = await token.balanceOf(charlie.address);
@@ -878,16 +874,16 @@ describe('test', async () => {
                         const charlieIncome = charlieAmount.add(charlieReward);
                         const latePenalty = charlieReward.mul(PENALTY_PERCENT_PER_WEEK).mul(bigLateWeeks).div(PERCENT_BASE);
                         const charlieProfit = charlieIncome.sub(latePenalty);
-    
+
                         expect(charlieBalanceAfter.sub(charlieBalanceBefore).div(HUN)).to.be.equal(charlieProfit.div(HUN));
-            
+
                     })
 
                     it('shouldnt take penalty if claimed in free late period (1 week)', async() => {
-                
+
                         const latePeriod = 6*DAY;
                         const termBeforeCharlieWithdraw = 3.5*YEAR + latePeriod;
-                        await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]); 
+                        await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]);
                         const charlieBalanceBefore = await token.balanceOf(charlie.address);
                         await carp.connect(charlie).withdraw(0);
                         const charlieBalanceAfter = await token.balanceOf(charlie.address);
@@ -895,23 +891,23 @@ describe('test', async () => {
                         const charlieIncome = charlieAmount.add(charlieReward);
 
                         expect((charlieBalanceAfter.sub(charlieBalanceBefore).div(HUN))).to.be.equal(charlieIncome.div(HUN));
-            
+
                     })
 
                     it('should withdraw only deposit if claim is too late', async() => {
 
                         const latePeriod = 51*WEEK;
                         const termBeforeCharlieWithdraw = 3.5*YEAR + latePeriod;
-                        await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]); 
+                        await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]);
                         const charlieBalanceBefore = await token.balanceOf(charlie.address);
                         await carp.connect(charlie).withdraw(0);
                         const charlieBalanceAfter = await token.balanceOf(charlie.address);
-    
+
                         expect((charlieBalanceAfter.sub(charlieBalanceBefore).div(HUN))).to.be.equal(charlieAmount.div(HUN));
-            
+
                     })
                 })
-    
+
             })
 
         })
