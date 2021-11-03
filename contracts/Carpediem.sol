@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.7;
+pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -152,7 +152,7 @@ contract CarpeDiem {
         require(stakeTs > 0, "stake was deleted");
         require(block.timestamp < stakeTerm + stakeTs, "stake matured");
         uint256 stakeDeposit = stakes[msg.sender][_stakeId].amount;
-        uint256 extraShares = _buyShares(_amount);
+        uint256 extraShares = _buyShares(_amount + getReward(msg.sender, _stakeId));
         uint256 shares = stakes[msg.sender][_stakeId].shares;
 
         uint256 boostedShares = shares +
@@ -171,7 +171,7 @@ contract CarpeDiem {
             shares + extraShares,
             boostedShares,
             lambda,
-            getReward(msg.sender, _stakeId)
+            0
         );
 
         emit UpgradedStake(
