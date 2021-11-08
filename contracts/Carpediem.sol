@@ -123,6 +123,7 @@ contract CarpeDiem {
     function deposit(uint256 _amount, uint256 _term) external {
         require(_amount > 0, "deposit cannot be zero");
         require(_term > 0, "term cannot be zero");
+        require(_term <= 5555 days, "huge term");
         uint256 shares = _buyShares(_amount);
         uint256 boostedShares = shares +
             _getBonusB(shares, _amount) +
