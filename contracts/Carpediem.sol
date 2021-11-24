@@ -16,6 +16,7 @@ contract CarpeDiem {
         uint256 shares;
         uint256 sharesWithBonuses;
         uint256 lastLambda;
+        uint256 assignedReward;
     }
 
     Ownable public immutable fab; // fabric contract
@@ -136,7 +137,8 @@ contract CarpeDiem {
                 block.timestamp,
                 shares,
                 boostedShares,
-                lambda
+                lambda,
+                0
             )
         );
 
@@ -151,8 +153,7 @@ contract CarpeDiem {
         require(stakeTs > 0, "stake was deleted");
         require(block.timestamp < stakeTerm + stakeTs, "stake matured");
         uint256 stakeDeposit = stakes[msg.sender][_stakeId].amount;
-        uint256 reward = getReward(msg.sender, _stakeId);
-        uint256 extraShares = _buyShares(_amount + reward);
+        uint256 extraShares = _buyShares(_amount);
         uint256 shares = stakes[msg.sender][_stakeId].shares;
 
         uint256 boostedShares = shares +
@@ -170,7 +171,8 @@ contract CarpeDiem {
             block.timestamp,
             shares + extraShares,
             boostedShares,
-            lambda
+            lambda,
+            getReward(msg.sender, _stakeId)
         );
 
         emit UpgradedStake(
@@ -227,10 +229,10 @@ contract CarpeDiem {
         returns (uint256)
     {
         uint256 lastLambda = stakes[_user][_stakeId].lastLambda;
-        uint256 reward = 0;
+        uint256 reward = stakes[_user][_stakeId].assignedReward;
         uint256 poolLambda = lambda;
         if (poolLambda - lastLambda > 0) {
-            reward =
+            reward +=
                 ((poolLambda - lastLambda) *
                     stakes[_user][_stakeId].sharesWithBonuses) /
                 (MULTIPLIER * MULTIPLIER);
