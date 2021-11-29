@@ -156,7 +156,6 @@ describe('test', async () => {
 
         beforeEach('deploy token and factory', async() => {
             await loadFixture(fixture);
-
         })
 
         it('should correct create pool through factory', async() => {
@@ -844,7 +843,12 @@ describe('test', async () => {
                     const eventTerm = receipt.events[receipt.events.length - 1].args.term;
 
                     const shares = extraAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE).add(s_alice);
-                    const sharesWithBonuses = shares.add(calculateBBonus(shares, aliceAmount.add(extraAmount))).add(calculateLBonus(shares.sub(s_alice), stakeTs.add(stakeTerm).sub(timestamp)));
+                    const startStakeTs = BigNumber.from(stakeInfoBefore[2]);
+                    const sharesWithBonuses = shares.add(
+                        calculateBBonus(shares, aliceAmount.add(extraAmount))
+                    ).add(
+                        calculateLBonus(shares, stakeTs.add(stakeTerm).sub(timestamp))
+                    );
 
                     expect(userShares).to.be.equal(shares);
                     expect(userSharesWithBonuses).to.be.equal(sharesWithBonuses);
@@ -859,8 +863,8 @@ describe('test', async () => {
                     expect(eventDepositor).to.be.equal(alice.address);
                     expect(eventAmount).to.be.equal(extraAmount);
                     expect(eventTerm).to.be.equal(stakeTs.add(stakeTerm).sub(timestamp));
-
                 })
+
                 describe('late reward tests', async() => {
                     it('should correct calculate penalty if claimed late ', async() => {
 
@@ -912,7 +916,6 @@ describe('test', async () => {
 
                     })
                 })
-
             })
 
         })

@@ -159,7 +159,7 @@ contract CarpeDiem {
         uint256 boostedShares = shares +
             extraShares +
             _getBonusB(shares + extraShares, stakeDeposit + _amount) +
-            _getBonusL(extraShares, stakeTs + stakeTerm - block.timestamp);
+            _getBonusL(shares + extraShares, stakeTs + stakeTerm - block.timestamp);
 
         totalShares +=
             boostedShares -
