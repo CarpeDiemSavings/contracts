@@ -304,7 +304,7 @@ describe('test', async () => {
             const eventTerm = receipt.events[receipt.events.length - 1].args.term;
 
 
-            const s_alice = aliceAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
+            const s_alice = aliceAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
             const S_alice = s_alice.add(calculateBBonus(s_alice, aliceAmount)).add(calculateLBonus(s_alice, termAlice));
             expect(shares).to.be.equal(s_alice);
             expect(amount).to.be.equal(aliceAmount);
@@ -423,9 +423,9 @@ describe('test', async () => {
             const poolInitialPrice = await carp.initialPrice();
 
 
-            const s_alice = aliceAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
-            const s_bob = bobAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
-            const s_charlie = charlieAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
+            const s_alice = aliceAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
+            const s_bob = bobAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
+            const s_charlie = charlieAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
             const S_alice = s_alice.add(calculateBBonus(s_alice, aliceAmount)).add(calculateLBonus(s_alice, termAlice));
             const S_bob = s_bob.add(calculateBBonus(s_bob, bobAmount)).add(calculateLBonus(s_bob, termBob));
             const S_charlie = s_charlie.add(calculateBBonus(s_charlie, charlieAmount)).add(calculateLBonus(s_charlie, termCharlie));
@@ -452,9 +452,9 @@ describe('test', async () => {
             const termBob = BigNumber.from(YEAR).mul(TWO);
             const termCharlie = BigNumber.from(YEAR).mul(TWO).mul(TWO);
 
-            const s_alice = aliceAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
-            const s_bob = bobAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
-            const s_charlie = charlieAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
+            const s_alice = aliceAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
+            const s_bob = bobAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
+            const s_charlie = charlieAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
             const S_alice = s_alice.add(calculateBBonus(s_alice, aliceAmount)).add(calculateLBonus(s_alice, termAlice));
             const S_bob = s_bob.add(calculateBBonus(s_bob, bobAmount)).add(calculateLBonus(s_bob, termBob));
             const S_charlie = s_charlie.add(calculateBBonus(s_charlie, charlieAmount)).add(calculateLBonus(s_charlie, termCharlie));
@@ -546,7 +546,7 @@ describe('test', async () => {
 
                 const totalShares = S_alice.add(S_charlie);
 
-                expect(poolLambda).to.be.equal(penaltyToPool.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(totalShares));
+                expect(poolLambda).to.be.equal(penaltyToPool.mul(LAMBDA_COEF).div(totalShares));
                 expect(poolTotalShares).to.be.equal(totalShares);
                 expect(poolCurrentPrice).to.be.equal(INITIAL_PRICE);
                 expect(poolInitialPrice).to.be.equal(INITIAL_PRICE);
@@ -671,11 +671,11 @@ describe('test', async () => {
                 await token.connect(darwin).approve(carp.address, darwinAmount);
                 await carp.connect(darwin).deposit(darwinAmount, termDarwin);
 
-                const s_darwin = darwinAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE);
+                const s_darwin = darwinAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE);
                 const S_darwin = s_darwin.add(calculateBBonus(s_darwin, darwinAmount)).add(calculateLBonus(s_darwin, termDarwin));
 
 
-                const termBeforeCharlieWithdraw = 1*YEAR;
+                const termBeforeCharlieWithdraw = YEAR;
                 await ethers.provider.send('evm_increaseTime', [termBeforeCharlieWithdraw]);
 
 
@@ -712,8 +712,8 @@ describe('test', async () => {
                 const poolInitialPriceAfter = await carp.initialPrice();
 
                 expect(poolLambdaAfter).to.be.equal((
-                    penaltyToPoolBefore.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(totalShares)).add(
-                    charliePenaltyToPool.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(charlieTotalShares)
+                    penaltyToPoolBefore.mul(LAMBDA_COEF).div(totalShares)).add(
+                    charliePenaltyToPool.mul(LAMBDA_COEF).div(charlieTotalShares)
                 ));
 
 
@@ -767,8 +767,9 @@ describe('test', async () => {
                 await carp.connect(charlie).withdraw(0);
                 const poolCurrentPriceAfter = await carp.currentPrice();
 
-                expect(poolCurrentPriceAfter.div(HUN)).to.be.equal( (charlieRewardBefore.add(charlieStakeAmount)).mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(s_charlie).div(HUN) );
-
+                const ecpectedPriceAfter = (charlieRewardBefore.add(charlieStakeAmount)).mul(LAMBDA_COEF).div(s_charlie);
+                expect(poolCurrentPriceAfter).to.be.gte(ecpectedPriceAfter.sub(1));
+                expect(poolCurrentPriceAfter).to.be.lte(ecpectedPriceAfter.add(1));
             })
 
             describe('upgradeStake tests', async() => {
@@ -791,7 +792,7 @@ describe('test', async () => {
                     const totalPenalty = bobAmount.mul(termBob.sub(ts).add(stakeTs)).div(termBob);
 
                     penaltyToPool = totalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
-                    lastLambda = penaltyToPool.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(totalShares);
+                    lastLambda = penaltyToPool.mul(LAMBDA_COEF).div(totalShares);
 
                 })
 
@@ -842,7 +843,7 @@ describe('test', async () => {
                     const eventAmount = receipt.events[receipt.events.length - 1].args.amount;
                     const eventTerm = receipt.events[receipt.events.length - 1].args.term;
 
-                    const shares = extraAmount.mul(LAMBDA_COEF).mul(LAMBDA_COEF).div(INITIAL_PRICE).add(s_alice);
+                    const shares = extraAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE).add(s_alice);
                     const sharesWithBonuses = shares.add(calculateBBonus(shares, aliceAmount.add(extraAmount))).add(calculateLBonus(shares.sub(s_alice), stakeTs.add(stakeTerm).sub(timestamp)));
 
                     expect(userShares).to.be.equal(shares);

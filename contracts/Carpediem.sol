@@ -204,7 +204,6 @@ contract CarpeDiem {
             lambda +=
                 (penalty *
                     MULTIPLIER *
-                    MULTIPLIER *
                     uint256(distributionPercents[4])) /
                 (percentBase * totalShares);
         }
@@ -233,18 +232,16 @@ contract CarpeDiem {
         uint256 poolLambda = lambda;
         if (poolLambda - lastLambda > 0) {
             reward +=
-                ((poolLambda - lastLambda) *
-                    stakes[_user][_stakeId].sharesWithBonuses) /
-                (MULTIPLIER * MULTIPLIER);
+                (poolLambda - lastLambda) *
+                    stakes[_user][_stakeId].sharesWithBonuses / MULTIPLIER;
         }
         return reward;
     }
 
     // buys shares for user for current share price
-    function _buyShares(uint256 _amount) internal returns (uint256) {
+    function _buyShares(uint256 _amount) internal returns (uint256 sharesToBuy) {
         IERC20(token).transferFrom(msg.sender, address(this), _amount); // take tokens
-        uint256 sharesToBuy = (_amount * MULTIPLIER) / currentPrice; // calculate corresponding amount of shares
-        return sharesToBuy * MULTIPLIER;
+        sharesToBuy = _amount * MULTIPLIER / currentPrice; // calculate corresponding amount of shares
     }
 
     function _getBonusB(uint256 _shares, uint256 _deposit)
@@ -314,9 +311,9 @@ contract CarpeDiem {
 
     function _changeSharesPrice(uint256 _profit, uint256 _shares) private {
         uint256 oldPrice = currentPrice;
-        if (_profit > (oldPrice * _shares) / (MULTIPLIER * MULTIPLIER)) {
+        if (_profit > (oldPrice * _shares) / (MULTIPLIER)) {
             // equivalent to _profit / shares > oldPrice
-            uint256 newPrice = (_profit * MULTIPLIER * MULTIPLIER) / _shares;
+            uint256 newPrice = (_profit * MULTIPLIER) / _shares;
             if (newPrice > MAX_PRICE) newPrice = MAX_PRICE;
             currentPrice = newPrice;
             emit NewPrice(oldPrice, newPrice);
