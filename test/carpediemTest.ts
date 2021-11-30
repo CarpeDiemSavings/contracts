@@ -833,7 +833,7 @@ describe('test', async () => {
 
                     const stakeAmount = stakeInfo.amount;
                     const stakeTerm = stakeInfo.term;
-                    const stakeTs = stakeInfo.ts;
+                    const stakeTs = BigNumber.from(stakeInfo.ts);
 
                     const poolTotalShares = await carp.totalShares();
 
@@ -843,7 +843,6 @@ describe('test', async () => {
                     const eventTerm = receipt.events[receipt.events.length - 1].args.term;
 
                     const shares = extraAmount.mul(LAMBDA_COEF).div(INITIAL_PRICE).add(s_alice);
-                    const startStakeTs = BigNumber.from(stakeInfoBefore[2]);
                     const sharesWithBonuses = shares.add(
                         calculateBBonus(shares, aliceAmount.add(extraAmount))
                     ).add(

@@ -7,48 +7,50 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 // Created by Carpe Diem Savings and SFXDX
 
 contract CarpeDiem {
-    mapping(address => StakeInfo[]) public stakes; // user address => StakeInfo
+    address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
 
-    struct StakeInfo {
-        uint256 amount;
-        uint256 term;
-        uint256 ts;
-        uint256 shares;
-        uint256 sharesWithBonuses;
-        uint256 lastLambda;
-        uint256 assignedReward;
-    }
+    uint256 private constant percentBase = 100;
+    uint256 private constant permile = 10000;
+    uint256 private constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
+    uint256 private constant WEEK = 7 days;
 
-    Ownable public immutable fab; // fabric contract
-    address public immutable token;
-    uint256 public immutable initialPrice; // initial shares price
-    uint256 public immutable bBonusAmount; // amount for maximum B bonus
-    uint256 public immutable lBonusPeriod; // period for maximum L bonus
+    uint256 public constant PENALTY_PERCENT_PER_WEEK = 2; // amount of penalty percents applied to reward every late week
+    uint256 public constant MAX_PENALTY_DURATION = 100 / PENALTY_PERCENT_PER_WEEK;
+    uint256 public constant MAX_PRICE = 1e12 * MULTIPLIER; // max price (1 share for 1 trillion tokens) to prevent overflow
+
+    Ownable public immutable factory;
+    IERC20 public immutable token;
     uint256 public immutable bBonusMaxPercent; // maximum value of B bonus
     uint256 public immutable lBonusMaxPercent; // maximum value of L bonus
+    uint256 public immutable lBonusPeriod; // period for maximum L bonus
+    uint256 public immutable initialPrice; // initial shares price
+    uint256 public immutable bBonusAmount; // amount for maximum B bonus
+
+
     uint256 public totalShares; // total shares with the bonuses in the pool
     uint256 public currentPrice; // current shares price
     uint256 public lambda;
     uint16[] public distributionPercents; // percents to distribute
     address[] public distributionAddresses; // addresses for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
 
-    address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
+    struct StakeInfo {
+        uint256 amount;
+        uint32 term;
+        uint32 ts;
+        uint256 shares;
+        uint256 sharesWithBonuses;
+        uint256 lastLambda;
+        uint256 assignedReward;
+    }
+    mapping(address => StakeInfo[]) public stakes; // user address => StakeInfo
 
-    uint256 private constant percentBase = 100;
-    uint256 private constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
-    uint256 private constant WEEK = 7 * 86400;
-
-    uint256 public constant FREE_LATE_PERIOD = WEEK; // period of free claiming after stake matured
-    uint256 public constant PENALTY_PERCENT_PER_WEEK = 2; // amount of penalty percents applied to reward every late week
-    uint256 public constant MAX_PRICE = 1e12 * MULTIPLIER; // max price (1 share for 1 trillion tokens) to prevent overflow
-
-    event Deposit(address depositor, uint256 id, uint256 amount, uint256 term);
+    event Deposit(address depositor, uint256 id, uint256 amount, uint32 term);
 
     event UpgradedStake(
         address depositor,
         uint256 id,
         uint256 amount,
-        uint256 term
+        uint32 term
     );
 
     event Withdraw(
@@ -62,14 +64,14 @@ contract CarpeDiem {
     event NewPrice(uint256 oldPrice, uint256 newPrice);
 
     constructor(
-        address _fab,
+        address _factory,
         address _token,
         uint256[5] memory _params,
         uint16[] memory _distributionPercents,
         address[] memory _distributionAddresses
     ) {
-        fab = Ownable(_fab);
-        token = _token;
+        factory = Ownable(_factory);
+        token = IERC20(_token);
         lambda = 0;
         totalShares = 0;
         currentPrice = _params[0];
@@ -83,11 +85,11 @@ contract CarpeDiem {
     }
 
     function owner() public view virtual returns (address) {
-        return fab.owner();
+        return factory.owner();
     }
 
     modifier onlyOwner() {
-        require(fab.owner() == msg.sender, "Ownable: caller is not the owner");
+        require(factory.owner() == msg.sender, "Ownable: caller is not the owner");
         _;
     }
 
@@ -121,7 +123,7 @@ contract CarpeDiem {
         distributionAddresses = _newDistributionAddresses;
     }
 
-    function deposit(uint256 _amount, uint256 _term) external {
+    function deposit(uint256 _amount, uint32 _term) external {
         require(_amount > 0, "deposit cannot be zero");
         require(_term > 0, "term cannot be zero");
         require(_term <= 5555 days, "huge term");
@@ -134,7 +136,7 @@ contract CarpeDiem {
             StakeInfo(
                 _amount,
                 _term,
-                block.timestamp,
+                uint32(block.timestamp),
                 shares,
                 boostedShares,
                 lambda,
@@ -148,18 +150,19 @@ contract CarpeDiem {
     function upgradeStake(uint256 _stakeId, uint256 _amount) external {
         require(_amount > 0, "deposit cannot be zero");
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
-        uint256 stakeTerm = stakes[msg.sender][_stakeId].term;
-        uint256 stakeTs = stakes[msg.sender][_stakeId].ts;
+        uint32 stakeTerm = stakes[msg.sender][_stakeId].term;
+        uint32 stakeTs = stakes[msg.sender][_stakeId].ts;
         require(stakeTs > 0, "stake was deleted");
         require(block.timestamp < stakeTerm + stakeTs, "stake matured");
         uint256 stakeDeposit = stakes[msg.sender][_stakeId].amount;
         uint256 extraShares = _buyShares(_amount);
         uint256 shares = stakes[msg.sender][_stakeId].shares;
+        uint32 blockTimestamp = uint32(block.timestamp);
 
         uint256 boostedShares = shares +
             extraShares +
             _getBonusB(shares + extraShares, stakeDeposit + _amount) +
-            _getBonusL(shares + extraShares, stakeTs + stakeTerm - block.timestamp);
+            _getBonusL(shares + extraShares, stakeTs + stakeTerm - blockTimestamp);
 
         totalShares +=
             boostedShares -
@@ -167,8 +170,8 @@ contract CarpeDiem {
         // update stake info
         stakes[msg.sender][_stakeId] = StakeInfo(
             stakeDeposit + _amount,
-            stakeTs + stakeTerm - block.timestamp,
-            block.timestamp,
+            stakeTs + stakeTerm - blockTimestamp,
+            blockTimestamp,
             shares + extraShares,
             boostedShares,
             lambda,
@@ -179,7 +182,7 @@ contract CarpeDiem {
             msg.sender,
             _stakeId,
             _amount,
-            stakeTs + stakeTerm - block.timestamp
+            stakeTs + stakeTerm - blockTimestamp
         );
     }
 
@@ -208,7 +211,7 @@ contract CarpeDiem {
                 (percentBase * totalShares);
         }
         delete stakes[msg.sender][_stakeId];
-        IERC20(token).transfer(msg.sender, depositAmount + reward - penalty);
+        token.transfer(msg.sender, depositAmount + reward - penalty);
         emit Withdraw(msg.sender, _stakeId, depositAmount, reward, penalty);
     }
 
@@ -240,7 +243,7 @@ contract CarpeDiem {
 
     // buys shares for user for current share price
     function _buyShares(uint256 _amount) internal returns (uint256 sharesToBuy) {
-        IERC20(token).transferFrom(msg.sender, address(this), _amount); // take tokens
+        token.transferFrom(msg.sender, address(this), _amount); // take tokens
         sharesToBuy = _amount * MULTIPLIER / currentPrice; // calculate corresponding amount of shares
     }
 
@@ -257,7 +260,7 @@ contract CarpeDiem {
         return (bBonusMaxPercent * _shares) / percentBase;
     }
 
-    function _getBonusL(uint256 _shares, uint256 _term)
+    function _getBonusL(uint256 _shares, uint32 _term)
         internal
         view
         returns (uint256)
@@ -276,17 +279,18 @@ contract CarpeDiem {
         uint256 _reward,
         uint256 _stakeId
     ) internal view returns (uint256) {
-        uint256 term = stakes[_user][_stakeId].term;
-        uint256 stakeTs = stakes[_user][_stakeId].ts;
-        if (stakeTs + term <= block.timestamp) {
-            if (stakeTs + term + FREE_LATE_PERIOD > block.timestamp) return 0;
-            uint256 lateWeeks = (block.timestamp - (stakeTs + term)) / WEEK;
-            if (lateWeeks >= 50) return _reward;
+        uint32 term = stakes[_user][_stakeId].term;
+        uint32 stakeTs = stakes[_user][_stakeId].ts;
+        uint32 blockTimestamp = uint32(block.timestamp);
+        if (stakeTs + term <= blockTimestamp) {
+            if (stakeTs + term + WEEK > blockTimestamp) return 0;
+            uint256 lateWeeks = (blockTimestamp - (stakeTs + term)) / WEEK;
+            if (lateWeeks >= MAX_PENALTY_DURATION) return _reward;
             return
                 (_reward * PENALTY_PERCENT_PER_WEEK * lateWeeks) / percentBase;
         }
         return
-            ((_deposit + _reward) * (term - (block.timestamp - stakeTs))) /
+            ((_deposit + _reward) * (term - (blockTimestamp - stakeTs))) /
             term;
     }
 
@@ -294,16 +298,16 @@ contract CarpeDiem {
         address[] memory addresses = distributionAddresses;
         uint16[] memory poolPercents = distributionPercents;
         uint256 base = percentBase;
-        address poolToken = token;
+        IERC20 poolToken = token;
         for (uint256 i = 0; i < addresses.length; i++) {
             if (poolPercents[i] > 0)
-                IERC20(poolToken).transfer(
+                poolToken.transfer(
                     addresses[i],
                     (_penalty * poolPercents[i]) / base
                 );
         }
         if (poolPercents[3] > 0)
-            IERC20(poolToken).transfer(
+            poolToken.transfer(
                 DEAD_WALLET,
                 (_penalty * poolPercents[3]) / base
             );
