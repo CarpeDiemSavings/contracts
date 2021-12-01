@@ -478,7 +478,7 @@ describe('test', async () => {
                 const stakeInfo = await carp.stakes(bob.address, 0);
                 await ethers.provider.send('evm_increaseTime', [1.5*YEAR]);
                 const penalty = await carp.getPenalty(bob.address, 0);
-                const stakeTs = stakeInfo.ts;
+                const stakeTs = stakeInfo.startTs;
 
                 const bobBalanceAfter = await token.balanceOf(bob.address);
                 const totalPenalty = bobAmount.mul(termBob.sub(bobTs.add(ONE)).add(stakeTs)).div(termBob);
@@ -502,7 +502,7 @@ describe('test', async () => {
             it('bob early withdraws', async() => {
                 const bobBalanceBefore = await token.balanceOf(bob.address);
                 const stakeInfo = await carp.stakes(bob.address, 0);
-                const stakeTs = stakeInfo.ts;
+                const stakeTs = stakeInfo.startTs;
                 let charityBalanceBefore = await token.balanceOf(charity.address);
                 let communityBalanceBefore = await token.balanceOf(community.address);
                 let ownerBalanceBefore = await token.balanceOf(owner.address);
@@ -576,7 +576,7 @@ describe('test', async () => {
             it('bob withdraw after stake matured', async() => {
                 const bobBalanceBefore = await token.balanceOf(bob.address);
                 const stakeInfo = await carp.stakes(bob.address, 0);
-                const stakeTs = stakeInfo.ts;
+                const stakeTs = stakeInfo.startTs;
                 let charityBalanceBefore = await token.balanceOf(charity.address);
                 let communityBalanceBefore = await token.balanceOf(community.address);
                 let ownerBalanceBefore = await token.balanceOf(owner.address);
@@ -637,7 +637,7 @@ describe('test', async () => {
             it('should give darwin reward if bob early withdraws, darwin came after and charlie early withdraw', async() => {
                 const stakeInfo = await carp.stakes(bob.address, 0);
                 // const amount = stake.amount;
-                const stakeTs = stakeInfo.ts;
+                const stakeTs = stakeInfo.startTs;
                 let charityBalanceBefore = await token.balanceOf(charity.address);
                 let communityBalanceBefore = await token.balanceOf(community.address);
                 let ownerBalanceBefore = await token.balanceOf(owner.address);
@@ -680,7 +680,7 @@ describe('test', async () => {
 
                 const charlieBalanceBefore = await token.balanceOf(charlie.address);
                 const charlieStake = await carp.stakes(charlie.address, 0);
-                const charlieStakeTs = charlieStake.ts;
+                const charlieStakeTs = charlieStake.startTs;
 
                 const charlieRewardBefore = penaltyToPoolBefore.mul(S_charlie).div(totalShares);
 
@@ -742,7 +742,7 @@ describe('test', async () => {
 
             it('should correct calculate new price ', async() => {
                 const stakeInfo = await carp.stakes(bob.address, 0);
-                const stakeTs = stakeInfo.ts;
+                const stakeTs = stakeInfo.startTs;
 
                 const termBeforeBobWithdraw = 1.5*YEAR;
                 await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]);
@@ -783,7 +783,7 @@ describe('test', async () => {
 
                     const tx = await carp.connect(bob).withdraw(0);
                     totalShares = S_alice.add(S_charlie);
-                    const stakeTs = stakeInfo.ts;
+                    const stakeTs = stakeInfo.startTs;
 
                     const receipt = await tx.wait();
                     const block = await receipt.events[0].getBlock();
@@ -833,7 +833,7 @@ describe('test', async () => {
 
                     const stakeAmount = stakeInfo.amount;
                     const stakeTerm = stakeInfo.term;
-                    const stakeTs = BigNumber.from(stakeInfo.ts);
+                    const stakeTs = BigNumber.from(stakeInfo.lastUpdateTs);
 
                     const poolTotalShares = await carp.totalShares();
 

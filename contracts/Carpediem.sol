@@ -26,7 +26,6 @@ contract CarpeDiem {
     uint256 public immutable initialPrice; // initial shares price
     uint256 public immutable bBonusAmount; // amount for maximum B bonus
 
-
     uint256 public totalShares; // total shares with the bonuses in the pool
     uint256 public currentPrice; // current shares price
     uint256 public lambda;
@@ -36,7 +35,8 @@ contract CarpeDiem {
     struct StakeInfo {
         uint256 amount;
         uint32 term;
-        uint32 ts;
+        uint32 startTs;
+        uint32 lastUpdateTs;
         uint256 shares;
         uint256 sharesWithBonuses;
         uint256 lastLambda;
@@ -137,6 +137,7 @@ contract CarpeDiem {
                 _amount,
                 _term,
                 uint32(block.timestamp),
+                uint32(block.timestamp),
                 shares,
                 boostedShares,
                 lambda,
@@ -151,9 +152,10 @@ contract CarpeDiem {
         require(_amount > 0, "deposit cannot be zero");
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
         uint32 stakeTerm = stakes[msg.sender][_stakeId].term;
-        uint32 stakeTs = stakes[msg.sender][_stakeId].ts;
+        uint32 stakeTs = stakes[msg.sender][_stakeId].startTs;
+        uint32 lastTs = stakes[msg.sender][_stakeId].lastUpdateTs;
         require(stakeTs > 0, "stake was deleted");
-        require(block.timestamp < stakeTerm + stakeTs, "stake matured");
+        require(block.timestamp < stakeTerm + lastTs, "stake matured");
         uint256 stakeDeposit = stakes[msg.sender][_stakeId].amount;
         uint256 extraShares = _buyShares(_amount);
         uint256 shares = stakes[msg.sender][_stakeId].shares;
@@ -162,7 +164,7 @@ contract CarpeDiem {
         uint256 boostedShares = shares +
             extraShares +
             _getBonusB(shares + extraShares, stakeDeposit + _amount) +
-            _getBonusL(shares + extraShares, stakeTs + stakeTerm - blockTimestamp);
+            _getBonusL(shares + extraShares, lastTs + stakeTerm - blockTimestamp);
 
         totalShares +=
             boostedShares -
@@ -171,6 +173,7 @@ contract CarpeDiem {
         stakes[msg.sender][_stakeId] = StakeInfo(
             stakeDeposit + _amount,
             stakeTs + stakeTerm - blockTimestamp,
+            stakeTs,
             blockTimestamp,
             shares + extraShares,
             boostedShares,
@@ -182,7 +185,7 @@ contract CarpeDiem {
             msg.sender,
             _stakeId,
             _amount,
-            stakeTs + stakeTerm - blockTimestamp
+            lastTs + stakeTerm - blockTimestamp
         );
     }
 
@@ -193,7 +196,6 @@ contract CarpeDiem {
         uint256 reward = getReward(msg.sender, _stakeId);
         uint256 penalty = _getPenalty(
             msg.sender,
-            depositAmount,
             reward,
             _stakeId
         );
@@ -220,9 +222,8 @@ contract CarpeDiem {
         view
         returns (uint256)
     {
-        uint256 depositAmount = stakes[_user][_stakeId].amount;
         uint256 reward = getReward(_user, _stakeId);
-        return _getPenalty(_user, depositAmount, reward, _stakeId);
+        return _getPenalty(_user, reward, _stakeId);
     }
 
     function getReward(address _user, uint256 _stakeId)
@@ -275,12 +276,12 @@ contract CarpeDiem {
 
     function _getPenalty(
         address _user,
-        uint256 _deposit,
         uint256 _reward,
         uint256 _stakeId
     ) internal view returns (uint256) {
+        uint256 depositAmount = stakes[_user][_stakeId].amount;
         uint32 term = stakes[_user][_stakeId].term;
-        uint32 stakeTs = stakes[_user][_stakeId].ts;
+        uint32 stakeTs = stakes[_user][_stakeId].startTs;
         uint32 blockTimestamp = uint32(block.timestamp);
         if (stakeTs + term <= blockTimestamp) {
             if (stakeTs + term + WEEK > blockTimestamp) return 0;
@@ -290,7 +291,7 @@ contract CarpeDiem {
                 (_reward * PENALTY_PERCENT_PER_WEEK * lateWeeks) / percentBase;
         }
         return
-            ((_deposit + _reward) * (term - (blockTimestamp - stakeTs))) /
+            ((depositAmount + _reward) * (term - (blockTimestamp - stakeTs))) /
             term;
     }
 
