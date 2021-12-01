@@ -817,6 +817,7 @@ describe('test', async () => {
 
                 it('should correct upgrade stake', async() => {
                     const stakeInfoBefore = await carp.stakes(alice.address, 0);
+                    const oldPoolTotalShares = await carp.totalShares();
                     const termBeforeAliceExtra = 0.1*YEAR;
                     await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]);
                     const extraAmount = ethers.utils.parseEther('10');
@@ -848,11 +849,15 @@ describe('test', async () => {
                     ).add(
                         calculateLBonus(shares, stakeTs.add(stakeTerm).sub(timestamp))
                     );
+                    const calculatedUserAssignedReward = penaltyToPool
+                        .mul(stakeInfoBefore.sharesWithBonuses)
+                        .div(oldPoolTotalShares)
 
                     expect(userShares).to.be.equal(shares);
                     expect(userSharesWithBonuses).to.be.equal(sharesWithBonuses);
                     expect(userLastLambda).to.be.equal(lastLambda);
-                    expect(userAssignedReward.div(HUN)).to.be.equal(penaltyToPool.mul(S_alice).div(totalShares).div(HUN));
+                    expect(userAssignedReward).to.be.gte(calculatedUserAssignedReward.sub(1));
+                    expect(userAssignedReward).to.be.lte(calculatedUserAssignedReward.add(1));
                     expect(stakeAmount).to.be.equal(aliceAmount.add(extraAmount));
                     expect(stakeTerm).to.be.equal(stakeTs.add(stakeTerm).sub(timestamp));
                     expect(stakeTs).to.be.equal(timestamp);

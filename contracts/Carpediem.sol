@@ -166,6 +166,8 @@ contract CarpeDiem {
             _getBonusB(shares + extraShares, stakeDeposit + _amount) +
             _getBonusL(shares + extraShares, lastTs + stakeTerm - blockTimestamp);
 
+        uint256 reward = getReward(msg.sender, _stakeId);
+
         totalShares +=
             boostedShares -
             stakes[msg.sender][_stakeId].sharesWithBonuses;
@@ -178,7 +180,7 @@ contract CarpeDiem {
             shares + extraShares,
             boostedShares,
             lambda,
-            getReward(msg.sender, _stakeId)
+            reward
         );
 
         emit UpgradedStake(
