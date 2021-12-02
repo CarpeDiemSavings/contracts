@@ -28,21 +28,13 @@ contract CarpediemFactory is Ownable {
         uint256 _lBonusPeriod,
         uint256 _bBonusMaxPercent,
         uint256 _lBonusMaxPercent,
-        uint16[] memory _distributionPercents,
-        address[] memory _distributionAddresses
+        uint16[5] memory _distributionPercents,
+        address[3] memory _distributionAddresses
     ) external onlyOwner {
         require(_token != address(0), "token cannot be zero");
         require(_initialPrice != 0, "price cannot be zero");
         require(_bBonusAmount != 0, "B bonus amount cannot be zero");
         require(_lBonusPeriod != 0, "L bonus period cannot be zero");
-        require(
-            _distributionPercents.length == 5,
-            "distributionPercents length must be == 5"
-        );
-        require(
-            _distributionAddresses.length == 3,
-            "distributionAddresses length must be == 3"
-        );
         uint256 sum;
         for (uint256 i = 0; i < _distributionPercents.length; i++) {
             sum += _distributionPercents[i];

@@ -110,7 +110,7 @@ describe('incorrect deployment', async() => {
             owner.address,
             charity.address,
         ];
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.revertedWith('distributionAddresses length must be == 3');
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.reverted;
     })
 
     it('shouldnt create pool with incorrect percents array length', async() => {
@@ -120,7 +120,7 @@ describe('incorrect deployment', async() => {
             10,
             40
         ];
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, wrongPercents, wallets)).to.be.revertedWith('distributionPercents length must be == 5');
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, wrongPercents, wallets)).to.be.reverted;
     })
 
     it('shouldnt create pool if at least one wallet is zero', async() => {
@@ -243,10 +243,10 @@ describe('test', async () => {
             ]
 
             await carp.connect(owner).setDistributionAddresses(newWallets);
-            const walletsFromPool = await carp.getDistributionAddresses();
-            for (let i = 0; i < walletsFromPool; i++ ) {
-                expect(walletsFromPool[i]).to.be.equal(newWallets[i]);
-            }
+            expect(await carp.distributionAddresses(0)).to.be.equal(newWallets[0]);
+            expect(await carp.distributionAddresses(1)).to.be.equal(newWallets[1]);
+            expect(await carp.distributionAddresses(2)).to.be.equal(newWallets[2]);
+
         })
 
         it('shouldnt set new wallets if array has incorrect length', async() => {
@@ -257,7 +257,7 @@ describe('test', async () => {
                 accounts[13].address,
             ]
 
-            await expect(carp.connect(owner).setDistributionAddresses(newWallets)).to.be.revertedWith('distributionAddresses length must be == 3');
+            await expect(carp.connect(owner).setDistributionAddresses(newWallets)).to.be.reverted;
         })
 
         it('shouldnt deposit if amount is zero', async() => {
@@ -530,12 +530,13 @@ describe('test', async () => {
                 const poolCurrentPrice = await carp.currentPrice();
                 const poolInitialPrice = await carp.initialPrice();
 
-
                 const eventName = receipt.events[receipt.events.length - 1].event;
                 const eventWho = receipt.events[receipt.events.length - 1].args.who;
                 const eventDeposit = receipt.events[receipt.events.length - 1].args.deposit;
                 const eventReward = receipt.events[receipt.events.length - 1].args.reward;
                 const eventPenalty = receipt.events[receipt.events.length - 1].args.penalty;
+
+                await carp.connect(owner).distributePenalty();
 
                 let charityBalanceAfter = await token.balanceOf(charity.address);
                 let communityBalanceAfter = await token.balanceOf(community.address);
@@ -648,6 +649,7 @@ describe('test', async () => {
                 const termBeforeBobWithdraw = 1.5*YEAR;
                 await ethers.provider.send('evm_increaseTime', [termBeforeBobWithdraw]);
                 const tx = await carp.connect(bob).withdraw(0);
+                await carp.connect(owner).distributePenalty();
 
                 const receipt = await tx.wait();
                 const block = await receipt.events[0].getBlock();
@@ -700,6 +702,8 @@ describe('test', async () => {
                 const charlieBurnPenalty = charlieTotalPenalty.mul(BURN_PERCENT).div(PERCENT_BASE);
                 const charliePenaltyToPool = charlieTotalPenalty.mul(INTEREST_PERCENT).div(PERCENT_BASE);
 
+                await carp.connect(owner).distributePenalty();
+
                 let charlieCharityBalanceAfter = await token.balanceOf(charity.address);
                 let charlieCommunityBalanceAfter = await token.balanceOf(community.address);
                 let charlieOwnerBalanceAfter = await token.balanceOf(owner.address);
@@ -714,7 +718,6 @@ describe('test', async () => {
                     penaltyToPoolBefore.mul(LAMBDA_COEF).div(totalShares)).add(
                     charliePenaltyToPool.mul(LAMBDA_COEF).div(charlieTotalShares)
                 ));
-
 
                 expect(poolTotalSharesAfter).to.be.equal(charlieTotalShares);
                 expect(poolInitialPriceAfter).to.be.equal(INITIAL_PRICE);

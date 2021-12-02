@@ -15,7 +15,8 @@ contract CarpeDiem {
     uint256 private constant WEEK = 7 days;
 
     uint256 public constant PENALTY_PERCENT_PER_WEEK = 2; // amount of penalty percents applied to reward every late week
-    uint256 public constant MAX_PENALTY_DURATION = 100 / PENALTY_PERCENT_PER_WEEK;
+    uint256 public constant MAX_PENALTY_DURATION =
+        100 / PENALTY_PERCENT_PER_WEEK;
     uint256 public constant MAX_PRICE = 1e12 * MULTIPLIER; // max price (1 share for 1 trillion tokens) to prevent overflow
 
     Ownable public immutable factory;
@@ -25,12 +26,15 @@ contract CarpeDiem {
     uint256 public immutable lBonusPeriod; // period for maximum L bonus
     uint256 public immutable initialPrice; // initial shares price
     uint256 public immutable bBonusAmount; // amount for maximum B bonus
+    uint256 public immutable burnPercent;
+    uint256 public immutable stakersPercent;
 
     uint256 public totalShares; // total shares with the bonuses in the pool
     uint256 public currentPrice; // current shares price
     uint256 public lambda;
-    uint16[] public distributionPercents; // percents to distribute
-    address[] public distributionAddresses; // addresses for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
+    uint16[3] public distributionPercents; // percents to distribute
+    address[3] public distributionAddresses; // addresses for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
+    uint256 public commissionAccumulator;
 
     struct StakeInfo {
         uint256 amount;
@@ -67,8 +71,8 @@ contract CarpeDiem {
         address _factory,
         address _token,
         uint256[5] memory _params,
-        uint16[] memory _distributionPercents,
-        address[] memory _distributionAddresses
+        uint16[5] memory _distributionPercents,
+        address[3] memory _distributionAddresses
     ) {
         factory = Ownable(_factory);
         token = IERC20(_token);
@@ -80,7 +84,11 @@ contract CarpeDiem {
         lBonusPeriod = _params[2];
         bBonusMaxPercent = _params[3];
         lBonusMaxPercent = _params[4];
-        distributionPercents = _distributionPercents;
+        distributionPercents[0] = _distributionPercents[0];
+        distributionPercents[1] = _distributionPercents[1];
+        distributionPercents[2] = _distributionPercents[2];
+        burnPercent = _distributionPercents[3];
+        stakersPercent = _distributionPercents[4];
         distributionAddresses = _distributionAddresses;
     }
 
@@ -89,37 +97,16 @@ contract CarpeDiem {
     }
 
     modifier onlyOwner() {
-        require(factory.owner() == msg.sender, "Ownable: caller is not the owner");
+        require(
+            factory.owner() == msg.sender,
+            "Ownable: caller is not the owner"
+        );
         _;
     }
 
-    function getDistributionAddresses()
-        external
-        view
-        returns (address[] memory)
-    {
-        return distributionAddresses;
-    }
-
-    function getDistributionPercents() external view returns (uint16[] memory) {
-        return distributionPercents;
-    }
-
-    function getUserStakes(address _user)
-        external
-        view
-        returns (StakeInfo[] memory)
-    {
-        return stakes[_user];
-    }
-
     function setDistributionAddresses(
-        address[] calldata _newDistributionAddresses
+        address[3] calldata _newDistributionAddresses
     ) external onlyOwner {
-        require(
-            _newDistributionAddresses.length == 3,
-            "distributionAddresses length must be == 3"
-        );
         distributionAddresses = _newDistributionAddresses;
     }
 
@@ -164,7 +151,10 @@ contract CarpeDiem {
         uint256 boostedShares = shares +
             extraShares +
             _getBonusB(shares + extraShares, stakeDeposit + _amount) +
-            _getBonusL(shares + extraShares, lastTs + stakeTerm - blockTimestamp);
+            _getBonusL(
+                shares + extraShares,
+                lastTs + stakeTerm - blockTimestamp
+            );
 
         uint256 reward = getReward(msg.sender, _stakeId);
 
@@ -196,27 +186,47 @@ contract CarpeDiem {
         uint256 depositAmount = stakes[msg.sender][_stakeId].amount;
         require(depositAmount > 0, "stake was deleted");
         uint256 reward = getReward(msg.sender, _stakeId);
-        uint256 penalty = _getPenalty(
-            msg.sender,
-            reward,
-            _stakeId
-        );
+        uint256 penalty = _getPenalty(msg.sender, reward, _stakeId);
         uint256 userShares = stakes[msg.sender][_stakeId].shares;
         _changeSharesPrice(depositAmount + reward - penalty, userShares);
-        _distributePenalty(penalty);
+        commissionAccumulator +=
+            (penalty * (percentBase - stakersPercent)) /
+            percentBase;
         totalShares -= stakes[msg.sender][_stakeId].sharesWithBonuses;
         if (totalShares == 0) {
             lambda = 0;
         } else {
             lambda +=
-                (penalty *
-                    MULTIPLIER *
-                    uint256(distributionPercents[4])) /
-                (percentBase * totalShares);
+                (penalty * MULTIPLIER * stakersPercent) /
+                percentBase /
+                totalShares;
         }
         delete stakes[msg.sender][_stakeId];
         token.transfer(msg.sender, depositAmount + reward - penalty);
         emit Withdraw(msg.sender, _stakeId, depositAmount, reward, penalty);
+    }
+
+    function distributePenalty() external {
+        address[3] memory addresses = distributionAddresses;
+        uint16[3] memory poolPercents = distributionPercents;
+        uint256 _commissionAccumulator = commissionAccumulator;
+        IERC20 poolToken = token;
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (poolPercents[i] > 0)
+                poolToken.transfer(
+                    addresses[i],
+                    (_commissionAccumulator * poolPercents[i]) /
+                        (percentBase - stakersPercent)
+                );
+        }
+        if (burnPercent > 0)
+            poolToken.transfer(
+                DEAD_WALLET,
+                (_commissionAccumulator * burnPercent) /
+                    (percentBase - stakersPercent)
+            );
+
+        commissionAccumulator = 0;
     }
 
     function getPenalty(address _user, uint256 _stakeId)
@@ -238,16 +248,20 @@ contract CarpeDiem {
         uint256 poolLambda = lambda;
         if (poolLambda - lastLambda > 0) {
             reward +=
-                (poolLambda - lastLambda) *
-                    stakes[_user][_stakeId].sharesWithBonuses / MULTIPLIER;
+                ((poolLambda - lastLambda) *
+                    stakes[_user][_stakeId].sharesWithBonuses) /
+                MULTIPLIER;
         }
         return reward;
     }
 
     // buys shares for user for current share price
-    function _buyShares(uint256 _amount) internal returns (uint256 sharesToBuy) {
+    function _buyShares(uint256 _amount)
+        internal
+        returns (uint256 sharesToBuy)
+    {
         token.transferFrom(msg.sender, address(this), _amount); // take tokens
-        sharesToBuy = _amount * MULTIPLIER / currentPrice; // calculate corresponding amount of shares
+        sharesToBuy = (_amount * MULTIPLIER) / currentPrice; // calculate corresponding amount of shares
     }
 
     function _getBonusB(uint256 _shares, uint256 _deposit)
@@ -295,25 +309,6 @@ contract CarpeDiem {
         return
             ((depositAmount + _reward) * (term - (blockTimestamp - stakeTs))) /
             term;
-    }
-
-    function _distributePenalty(uint256 _penalty) internal {
-        address[] memory addresses = distributionAddresses;
-        uint16[] memory poolPercents = distributionPercents;
-        uint256 base = percentBase;
-        IERC20 poolToken = token;
-        for (uint256 i = 0; i < addresses.length; i++) {
-            if (poolPercents[i] > 0)
-                poolToken.transfer(
-                    addresses[i],
-                    (_penalty * poolPercents[i]) / base
-                );
-        }
-        if (poolPercents[3] > 0)
-            poolToken.transfer(
-                DEAD_WALLET,
-                (_penalty * poolPercents[3]) / base
-            );
     }
 
     function _changeSharesPrice(uint256 _profit, uint256 _shares) private {
