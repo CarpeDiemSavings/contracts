@@ -286,7 +286,8 @@ describe('test', async () => {
             const receipt = await tx.wait();
             const stakeInfo = await carp.stakes(alice.address, 0);
             const shares = stakeInfo.shares;
-            const sharesWithBonuses = stakeInfo.sharesWithBonuses;
+            const lBonusShares = stakeInfo.lBonusShares;
+            const bBonusShares = stakeInfo.bBonusShares;
             const lastLambda = stakeInfo.lastLambda;
             const assignedReward = stakeInfo.assignedReward;
             const amount = stakeInfo.amount;
@@ -307,7 +308,8 @@ describe('test', async () => {
             const S_alice = s_alice.add(calculateBBonus(s_alice, aliceAmount)).add(calculateLBonus(s_alice, termAlice));
             expect(shares).to.be.equal(s_alice);
             expect(amount).to.be.equal(aliceAmount);
-            expect(sharesWithBonuses).to.be.equal(S_alice);
+            expect(lBonusShares).to.be.equal(calculateLBonus(s_alice, termAlice));
+            expect(bBonusShares).to.be.equal(calculateBBonus(s_alice, aliceAmount));
             expect(lastLambda).to.be.equal(0);
             expect(assignedReward).to.be.equal(0);
             expect(term).to.be.equal(termAlice);
@@ -332,9 +334,10 @@ describe('test', async () => {
 
             const stakeInfo = await carp.stakes(alice.address, 0);
             const userShares = stakeInfo.shares;
-            const userSharesWithBonuses = stakeInfo.sharesWithBonuses;
+            const lBonusShares = stakeInfo.lBonusShares;
+            const bBonusShares = stakeInfo.bBonusShares;
 
-            expect(userSharesWithBonuses).to.be.equal(userShares.mul(ONE.add(TWO)));
+            expect(userShares.add(lBonusShares).add(bBonusShares)).to.be.equal(userShares.mul(ONE.add(TWO)));
 
         })
 
@@ -346,7 +349,9 @@ describe('test', async () => {
 
             const stakeInfo = await carp.stakes(owner.address, 0);
             const userShares = stakeInfo.shares;
-            const userSharesWithBonuses = stakeInfo.sharesWithBonuses;
+            const lBonusShares = stakeInfo.lBonusShares;
+            const bBonusShares = stakeInfo.bBonusShares;
+            const userSharesWithBonuses = userShares.add(lBonusShares).add(bBonusShares);
 
             expect(userSharesWithBonuses.div(LAMBDA_COEF).div(LAMBDA_COEF)).to.be.equal((userShares.add(userShares.mul(TEN).div(HUN))).div(LAMBDA_COEF).div(LAMBDA_COEF));
 
@@ -360,9 +365,10 @@ describe('test', async () => {
 
             const stakeInfo = await carp.stakes(owner.address, 0);
             const userShares = stakeInfo.shares;
-            const userSharesWithBonuses = stakeInfo.sharesWithBonuses;
+            const lBonusShares = stakeInfo.lBonusShares;
+            const bBonusShares = stakeInfo.bBonusShares;
 
-            expect(userSharesWithBonuses).to.be.equal(userShares.add(userShares.mul(TEN).div(HUN)).add(userShares.mul(TWO)));
+            expect(lBonusShares.add(bBonusShares)).to.be.equal((userShares.mul(TEN).div(HUN)).add(userShares.mul(TWO)));
 
         })
 
@@ -820,6 +826,11 @@ describe('test', async () => {
 
                 it('should correct upgrade stake', async() => {
                     const stakeInfoBefore = await carp.stakes(alice.address, 0);
+                    const sharesWithBonusesBefore = (stakeInfoBefore.shares).add(
+                        stakeInfoBefore.lBonusShares
+                    ).add(
+                        stakeInfoBefore.bBonusShares
+                    );
                     const oldPoolTotalShares = await carp.totalShares();
                     const termBeforeAliceExtra = 0.1*YEAR;
                     await ethers.provider.send('evm_increaseTime', [termBeforeAliceExtra]);
@@ -831,7 +842,9 @@ describe('test', async () => {
                     const timestamp = block.timestamp;
                     const stakeInfo = await carp.stakes(alice.address, 0);
                     const userShares = stakeInfo.shares;
-                    const userSharesWithBonuses = stakeInfo.sharesWithBonuses;
+                    const lBonusShares = stakeInfo.lBonusShares;
+                    const bBonusShares = stakeInfo.bBonusShares;
+                    const userSharesWithBonuses = userShares.add(lBonusShares).add(bBonusShares);
                     const userLastLambda = stakeInfo.lastLambda;
                     const userAssignedReward = stakeInfo.assignedReward;
 
@@ -850,10 +863,10 @@ describe('test', async () => {
                     const sharesWithBonuses = shares.add(
                         calculateBBonus(shares, aliceAmount.add(extraAmount))
                     ).add(
-                        calculateLBonus(shares, stakeTs.add(stakeTerm).sub(timestamp))
-                    );
+                        calculateLBonus(extraAmount, stakeTs.add(stakeTerm).sub(timestamp))
+                    ).add(stakeInfoBefore.lBonusShares);
                     const calculatedUserAssignedReward = penaltyToPool
-                        .mul(stakeInfoBefore.sharesWithBonuses)
+                        .mul(sharesWithBonusesBefore)
                         .div(oldPoolTotalShares)
 
                     expect(userShares).to.be.equal(shares);

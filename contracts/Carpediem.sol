@@ -42,7 +42,8 @@ contract CarpeDiem {
         uint32 startTs;
         uint32 lastUpdateTs;
         uint256 shares;
-        uint256 sharesWithBonuses;
+        uint256 lBonusShares;
+        uint256 bBonusShares;
         uint256 lastLambda;
         uint256 assignedReward;
     }
@@ -115,10 +116,9 @@ contract CarpeDiem {
         require(_term > 0, "term cannot be zero");
         require(_term <= 5555 days, "huge term");
         uint256 shares = _buyShares(_amount);
-        uint256 boostedShares = shares +
-            _getBonusB(shares, _amount) +
-            _getBonusL(shares, _term);
-        totalShares += boostedShares;
+        uint256 lBonusShares = _getBonusL(shares, _term);
+        uint256 bBonusShares = _getBonusB(shares, _amount);
+        totalShares = totalShares + shares + lBonusShares + bBonusShares;
         stakes[msg.sender].push(
             StakeInfo(
                 _amount,
@@ -126,7 +126,8 @@ contract CarpeDiem {
                 uint32(block.timestamp),
                 uint32(block.timestamp),
                 shares,
-                boostedShares,
+                lBonusShares,
+                bBonusShares,
                 lambda,
                 0
             )
@@ -138,61 +139,69 @@ contract CarpeDiem {
     function upgradeStake(uint256 _stakeId, uint256 _amount) external {
         require(_amount > 0, "deposit cannot be zero");
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
-        uint32 stakeTerm = stakes[msg.sender][_stakeId].term;
-        uint32 stakeTs = stakes[msg.sender][_stakeId].startTs;
-        uint32 lastTs = stakes[msg.sender][_stakeId].lastUpdateTs;
-        require(stakeTs > 0, "stake was deleted");
-        require(block.timestamp < stakeTerm + lastTs, "stake matured");
-        uint256 stakeDeposit = stakes[msg.sender][_stakeId].amount;
+        StakeInfo memory stakeInfo = stakes[msg.sender][_stakeId];
+        require(stakeInfo.startTs > 0, "stake was deleted");
+        require(
+            block.timestamp < stakeInfo.term + stakeInfo.lastUpdateTs,
+            "stake matured"
+        );
         uint256 extraShares = _buyShares(_amount);
-        uint256 shares = stakes[msg.sender][_stakeId].shares;
         uint32 blockTimestamp = uint32(block.timestamp);
 
-        uint256 boostedShares = shares +
+        uint256 lBonusShares = _getBonusL(
+            extraShares,
+            stakeInfo.lastUpdateTs + stakeInfo.term - blockTimestamp
+        );
+        uint256 bBonusShares = _getBonusB(
+            stakeInfo.shares + extraShares,
+            stakeInfo.amount + _amount
+        );
+
+        totalShares =
+            totalShares +
             extraShares +
-            _getBonusB(shares + extraShares, stakeDeposit + _amount) +
-            _getBonusL(
-                shares + extraShares,
-                lastTs + stakeTerm - blockTimestamp
-            );
-
-        uint256 reward = getReward(msg.sender, _stakeId);
-
-        totalShares +=
-            boostedShares -
-            stakes[msg.sender][_stakeId].sharesWithBonuses;
+            bBonusShares +
+            lBonusShares -
+            stakeInfo.bBonusShares;
         // update stake info
         stakes[msg.sender][_stakeId] = StakeInfo(
-            stakeDeposit + _amount,
-            stakeTs + stakeTerm - blockTimestamp,
-            stakeTs,
+            stakeInfo.amount + _amount,
+            stakeInfo.startTs + stakeInfo.term - blockTimestamp,
+            stakeInfo.startTs,
             blockTimestamp,
-            shares + extraShares,
-            boostedShares,
+            stakeInfo.shares + extraShares,
+            stakeInfo.lBonusShares + lBonusShares,
+            bBonusShares,
             lambda,
-            reward
+            getReward(msg.sender, _stakeId)
         );
 
         emit UpgradedStake(
             msg.sender,
             _stakeId,
             _amount,
-            lastTs + stakeTerm - blockTimestamp
+            stakeInfo.lastUpdateTs + stakeInfo.term - blockTimestamp
         );
     }
 
     function withdraw(uint256 _stakeId) external {
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
-        uint256 depositAmount = stakes[msg.sender][_stakeId].amount;
-        require(depositAmount > 0, "stake was deleted");
+        StakeInfo memory stakeInfo = stakes[msg.sender][_stakeId];
+        require(stakeInfo.amount > 0, "stake was deleted");
         uint256 reward = getReward(msg.sender, _stakeId);
         uint256 penalty = _getPenalty(msg.sender, reward, _stakeId);
-        uint256 userShares = stakes[msg.sender][_stakeId].shares;
-        _changeSharesPrice(depositAmount + reward - penalty, userShares);
+        _changeSharesPrice(
+            stakeInfo.amount + reward - penalty,
+            stakeInfo.shares
+        );
         commissionAccumulator +=
             (penalty * (percentBase - stakersPercent)) /
             percentBase;
-        totalShares -= stakes[msg.sender][_stakeId].sharesWithBonuses;
+        totalShares =
+            totalShares -
+            stakeInfo.shares -
+            stakeInfo.bBonusShares -
+            stakeInfo.lBonusShares;
         if (totalShares == 0) {
             lambda = 0;
         } else {
@@ -202,8 +211,8 @@ contract CarpeDiem {
                 totalShares;
         }
         delete stakes[msg.sender][_stakeId];
-        token.transfer(msg.sender, depositAmount + reward - penalty);
-        emit Withdraw(msg.sender, _stakeId, depositAmount, reward, penalty);
+        token.transfer(msg.sender, stakeInfo.amount + reward - penalty);
+        emit Withdraw(msg.sender, _stakeId, stakeInfo.amount, reward, penalty);
     }
 
     function distributePenalty() external {
@@ -243,16 +252,17 @@ contract CarpeDiem {
         view
         returns (uint256)
     {
-        uint256 lastLambda = stakes[_user][_stakeId].lastLambda;
-        uint256 reward = stakes[_user][_stakeId].assignedReward;
+        StakeInfo memory stakeInfo = stakes[_user][_stakeId];
         uint256 poolLambda = lambda;
-        if (poolLambda - lastLambda > 0) {
-            reward +=
-                ((poolLambda - lastLambda) *
-                    stakes[_user][_stakeId].sharesWithBonuses) /
+        if (poolLambda - stakeInfo.lastLambda > 0) {
+            stakeInfo.assignedReward +=
+                ((poolLambda - stakeInfo.lastLambda) *
+                    (stakeInfo.shares +
+                        stakeInfo.bBonusShares +
+                        stakeInfo.lBonusShares)) /
                 MULTIPLIER;
         }
-        return reward;
+        return stakeInfo.assignedReward;
     }
 
     // buys shares for user for current share price
