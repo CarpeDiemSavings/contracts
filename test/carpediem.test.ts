@@ -1,106 +1,58 @@
 import { ethers, waffle, artifacts } from 'hardhat'
-import {Wallet} from "ethers";
-import {MockProvider} from "ethereum-waffle";
 import { BigNumber } from 'ethers'
-const {deployContract} = waffle
 import { expect } from 'chai'
-import chai  from 'chai'
-import * as FactoryABI from "../artifacts/contracts/CarpediemFactory.sol/CarpediemFactory.json";
 
-chai.use(require('chai-bignumber')());
+import {
+    BBonus,
+    BBonusMaxPercent, BURN_PERCENT, CHARITY_PERCENT, COMMUNITY_PERCENT, DAY, DEAD_WALLET, HUN,
+    INITIAL_PRICE, INTEREST_PERCENT, LAMBDA_COEF,
+    LBonus,
+    LBonusMaxPercent, ONE, OWNER_PERCENT, PENALTY_PERCENT_PER_WEEK,
+    penaltyPercents, PERCENT_BASE, TEN,
+    TOTALSUPPLY, TWO, WEEK, YEAR, ZERO_ADDRESS
+} from "./shared/constants"
+import {calculateBBonus, calculateLBonus} from "./shared/calculates"
+import {fixture} from "./shared/fixtures"
 
 const createFixtureLoader = waffle.createFixtureLoader
 
-const ONE = BigNumber.from('1');
-const TWO = BigNumber.from('2');
-const TEN = BigNumber.from('10');
-const HUN = BigNumber.from('100');
-const DEAD_WALLET =  '0x000000000000000000000000000000000000dEaD';
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const TOTALSUPPLY = ethers.utils.parseEther('1000000000000000');
-const DAY = 86400;
-const WEEK = 7 * 86400;
-const YEAR = DAY * 365;
-const LBonus = 10 * YEAR;
-const LBonusMaxPercent = 200;
-const BBonus = ethers.utils.parseEther('100000');
-const BBonusMaxPercent = 10;
-const PERCENT_BASE = 100;
-const INTEREST_PERCENT = 50;
-const INITIAL_PRICE = ethers.utils.parseEther('1');
-
-const penaltyPercents = [10, 10, 10, 20, 50];
-
-const FREE_LATE_PERIOD = 7 * 86400;
-const PENALTY_PERCENT_PER_WEEK = BigNumber.from(2);
-
-const BURN_PERCENT = 20;
-const CHARITY_PERCENT = 10;
-const COMMUNITY_PERCENT = 10;
-const OWNER_PERCENT = 10;
-
-const LAMBDA_COEF = ethers.utils.parseEther('1');
-
-let token: any;
-let carp: any;
-let factory: any;
-let wallets: any;
-
 const accounts = waffle.provider.getWallets()
-const owner = accounts[0];
-const charity = accounts[1];
-const community = accounts[2];
-const alice = accounts[3];
-const bob = accounts[4];
-const charlie = accounts[5];
-const darwin = accounts[6];
-const other = accounts[7];
-
-function calculateBBonus(shares: any, amount: any) {
-    if (amount.lt(BBonus)) return shares.mul(BBonusMaxPercent).mul(amount).div(BBonus).div(PERCENT_BASE);
-    return BigNumber.from(BBonusMaxPercent).mul(shares).div(PERCENT_BASE);
-}
-
-function calculateLBonus(shares: any, term: any) {
-    if (term < LBonus) return shares.mul(LBonusMaxPercent).mul(term).div(LBonus).div(PERCENT_BASE);
-    return BigNumber.from(LBonusMaxPercent).mul(shares).div(PERCENT_BASE);
-}
-
-async function fixture(_signers: Wallet[], _mockProvider: MockProvider) {
-    const signers = waffle.provider.getWallets();
-    factory = await deployContract(signers[0], FactoryABI);
-    const Token = await ethers.getContractFactory('Token');
-    token = await Token.deploy(TOTALSUPPLY);
-    await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
-    const poolAddress = await factory.allPools(0);
-    const carpArtifacts = await artifacts.readArtifact("CarpeDiem");
-    carp = new ethers.Contract(poolAddress, carpArtifacts.abi, ethers.provider);
-
-    await token.transfer(alice.address, ethers.utils.parseEther('100'))
-    await token.transfer(bob.address, ethers.utils.parseEther('100'))
-    await token.transfer(charlie.address, ethers.utils.parseEther('100'))
-    await token.transfer(darwin.address, ethers.utils.parseEther('100'))
-    return {factory, carp, token};
-}
+const owner = accounts[0]
+const charity = accounts[1]
+const community = accounts[2]
+const alice = accounts[3]
+const bob = accounts[4]
+const charlie = accounts[5]
+const darwin = accounts[6]
+const other = accounts[7]
 
 describe('incorrect deployment', async() => {
+    let token: any
+    let factory: any
+    let wallets: any
+
     beforeEach('deploy factory and token', async() => {
-        const Token = await ethers.getContractFactory('Token');
-        const Factory = await ethers.getContractFactory('CarpediemFactory');
-        token = await Token.deploy(TOTALSUPPLY);
-        factory = await Factory.deploy();
+        const Token = await ethers.getContractFactory('Token')
+        const Factory = await ethers.getContractFactory('CarpediemFactory')
+        token = await Token.deploy(TOTALSUPPLY)
+        factory = await Factory.deploy()
+        wallets = [
+            owner.address,
+            charity.address,
+            community.address
+        ]
     })
     it('shouldnt deploy pool with zero token address', async() => {
-        await expect(factory.createPool(ZERO_ADDRESS, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('token cannot be zero');
+        await expect(factory.createPool(ZERO_ADDRESS, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('token cannot be zero')
     })
     it('shouldnt create pool with zero initial share price', async() => {
-        await expect(factory.createPool(token.address, 0, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('price cannot be zero');
+        await expect(factory.createPool(token.address, 0, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('price cannot be zero')
     })
     it('shouldnt create pool with zero BBonus', async() => {
-        await expect(factory.createPool(token.address, INITIAL_PRICE, 0, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('B bonus amount cannot be zero');
+        await expect(factory.createPool(token.address, INITIAL_PRICE, 0, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('B bonus amount cannot be zero')
     })
     it('shouldnt create pool with zero LBonus', async() => {
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, 0, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('L bonus period cannot be zero');
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, 0, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('L bonus period cannot be zero')
     })
 
     it('shouldnt create pool with incorrect addresses array length', async() => {
@@ -109,8 +61,8 @@ describe('incorrect deployment', async() => {
             DEAD_WALLET,
             owner.address,
             charity.address,
-        ];
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.reverted;
+        ]
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.reverted
     })
 
     it('shouldnt create pool with incorrect percents array length', async() => {
@@ -119,8 +71,8 @@ describe('incorrect deployment', async() => {
             25,
             10,
             40
-        ];
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, wrongPercents, wallets)).to.be.reverted;
+        ]
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, wrongPercents, wallets)).to.be.reverted
     })
 
     it('shouldnt create pool if at least one wallet is zero', async() => {
@@ -128,111 +80,110 @@ describe('incorrect deployment', async() => {
             ZERO_ADDRESS,
             charity.address,
             community.address
-        ];
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.revertedWith('wallet cannot be == 0');
+        ]
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wrongWallets)).to.be.revertedWith('wallet cannot be == 0')
     })
 
     it('shouldnt create pool if percent sum != 100', async() => {
-        const wrongPenaltyPercents = [50, 20, 10, 10, 9];
+        const wrongPenaltyPercents = [50, 20, 10, 10, 9]
 
-        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, wrongPenaltyPercents, wallets)).to.be.revertedWith('percent sum must be == 100');
+        await expect(factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, wrongPenaltyPercents, wallets)).to.be.revertedWith('percent sum must be == 100')
     })
 })
 
 describe('test', async () => {
+    let token: any
+    let carp: any
+    let factory: any
+    let wallets: any
 
-    wallets = [
-        owner.address,
-        charity.address,
-        community.address
-    ];
     let loadFixture: ReturnType<typeof createFixtureLoader>
     before('create fixture loader', async () => {
-        loadFixture = createFixtureLoader([owner, other])
+        const signers = waffle.provider.getWallets()
+        loadFixture = createFixtureLoader(signers)
+        wallets = [
+            owner.address,
+            charity.address,
+            community.address
+        ]
     })
 
-
     describe('deployment through factory', async () => {
-
         beforeEach('deploy token and factory', async() => {
-            await loadFixture(fixture);
+            ({factory, carp, token} = await loadFixture(fixture))
         })
 
         it('should correct create pool through factory', async() => {
-            const {factory ,carp} = await loadFixture(fixture);
+            const poolAddress = await factory.allPools(0)
+            expect(poolAddress).to.not.be.equal(ZERO_ADDRESS)
+            const aliceBalance = await token.balanceOf(alice.address)
 
-            const poolAddress = await factory.allPools(0);
-            expect(poolAddress).to.not.be.equal(ZERO_ADDRESS);
-            const aliceBalance = await token.balanceOf(alice.address);
+            const poolToken = await carp.token()
+            expect(poolToken).to.be.equal(token.address)
 
-            const poolToken = await carp.token();
-            expect(poolToken).to.be.equal(token.address);
+            const factoryOwner = await factory.owner()
+            const carpOwner = await carp.owner()
 
-            const factoryOwner = await factory.owner();
-            const carpOwner = await carp.owner();
+            expect(factoryOwner).to.be.equal(carpOwner)
+            const poolLambda = await carp.lambda()
+            const poolTotalShares = await carp.totalShares()
+            const poolCurrentPrice = await carp.currentPrice()
+            const poolInitialPrice = await carp.initialPrice()
+            const poolBBonusAmount = await carp.bBonusAmount()
+            const poolLBonusPeriod = await carp.lBonusPeriod()
+            const poolbBonusMaxPercent = await carp.bBonusMaxPercent()
+            const poollBonusMaxPercent = await carp.lBonusMaxPercent()
 
-            expect(factoryOwner).to.be.equal(carpOwner);
-            const poolLambda = await carp.lambda();
-            const poolTotalShares = await carp.totalShares();
-            const poolCurrentPrice = await carp.currentPrice();
-            const poolInitialPrice = await carp.initialPrice();
-            const poolBBonusAmount = await carp.bBonusAmount();
-            const poolLBonusPeriod = await carp.lBonusPeriod();
-            const poolbBonusMaxPercent = await carp.bBonusMaxPercent();
-            const poollBonusMaxPercent = await carp.lBonusMaxPercent();
-
-            // const eventName = receipt.events[receipt.events.length - 1].event;
-            // const eventToken = receipt.events[receipt.events.length - 1].args.token;
-            // const eventPoolAddress = receipt.events[receipt.events.length - 1].args.poolAddress;
-            // const eventInitialPrice = receipt.events[receipt.events.length - 1].args.initialPrice;
-            // const eventBBonusAmount = receipt.events[receipt.events.length - 1].args.bBonusAmount;
-            // const eventLBonusPeriod = receipt.events[receipt.events.length - 1].args.lBonusPeriod;
-            // const eventBBonusMaxPercent = receipt.events[receipt.events.length - 1].args.bBonusMaxPercent;
-            // const eventLBonusMaxPercent = receipt.events[receipt.events.length - 1].args.lBonusMaxPercent;
+            // const eventName = receipt.events[receipt.events.length - 1].event
+            // const eventToken = receipt.events[receipt.events.length - 1].args.token
+            // const eventPoolAddress = receipt.events[receipt.events.length - 1].args.poolAddress
+            // const eventInitialPrice = receipt.events[receipt.events.length - 1].args.initialPrice
+            // const eventBBonusAmount = receipt.events[receipt.events.length - 1].args.bBonusAmount
+            // const eventLBonusPeriod = receipt.events[receipt.events.length - 1].args.lBonusPeriod
+            // const eventBBonusMaxPercent = receipt.events[receipt.events.length - 1].args.bBonusMaxPercent
+            // const eventLBonusMaxPercent = receipt.events[receipt.events.length - 1].args.lBonusMaxPercent
 
 
-            expect(poolToken).to.be.equal(token.address);
-            expect(poolLambda).to.be.equal(0);
-            expect(poolTotalShares).to.be.equal(0);
-            expect(poolCurrentPrice).to.be.equal(INITIAL_PRICE);
-            expect(poolInitialPrice).to.be.equal(INITIAL_PRICE);
-            expect(poolBBonusAmount).to.be.equal(BBonus);
-            expect(poolLBonusPeriod).to.be.equal(LBonus);
-            expect(poollBonusMaxPercent).to.be.equal(LBonusMaxPercent);
-            expect(poolbBonusMaxPercent).to.be.equal(BBonusMaxPercent);
+            expect(poolToken).to.be.equal(token.address)
+            expect(poolLambda).to.be.equal(0)
+            expect(poolTotalShares).to.be.equal(0)
+            expect(poolCurrentPrice).to.be.equal(INITIAL_PRICE)
+            expect(poolInitialPrice).to.be.equal(INITIAL_PRICE)
+            expect(poolBBonusAmount).to.be.equal(BBonus)
+            expect(poolLBonusPeriod).to.be.equal(LBonus)
+            expect(poollBonusMaxPercent).to.be.equal(LBonusMaxPercent)
+            expect(poolbBonusMaxPercent).to.be.equal(BBonusMaxPercent)
 
-            // expect(eventName).to.be.equal("NewPool");
-            // expect(eventToken).to.be.equal(token.address);
-            // expect(eventPoolAddress).to.be.equal(poolAddress);
-            // expect(eventBBonusAmount).to.be.equal(BBonus);
-            // expect(eventLBonusPeriod).to.be.equal(LBonus);
-            // expect(eventInitialPrice).to.be.equal(INITIAL_PRICE);
-            // expect(eventBBonusMaxPercent).to.be.equal(BBonusMaxPercent);
-            // expect(eventLBonusMaxPercent).to.be.equal(LBonusMaxPercent);
-
-
+            // expect(eventName).to.be.equal("NewPool")
+            // expect(eventToken).to.be.equal(token.address)
+            // expect(eventPoolAddress).to.be.equal(poolAddress)
+            // expect(eventBBonusAmount).to.be.equal(BBonus)
+            // expect(eventLBonusPeriod).to.be.equal(LBonus)
+            // expect(eventInitialPrice).to.be.equal(INITIAL_PRICE)
+            // expect(eventBBonusMaxPercent).to.be.equal(BBonusMaxPercent)
+            // expect(eventLBonusMaxPercent).to.be.equal(LBonusMaxPercent)
         })
 
         it('should create several identical pools', async() => {
-            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
-            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
-            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets);
-            const pool0 = await factory.allPools(0);
-            const pool1 = await factory.allPools(1);
-            const pool2 = await factory.allPools(2);
-            const pool3 = await factory.allPools(3);
-            expect(pool0).to.not.be.equal(ZERO_ADDRESS);
-            expect(pool1).to.not.be.equal(ZERO_ADDRESS);
-            expect(pool2).to.not.be.equal(ZERO_ADDRESS);
-            expect(pool3).to.not.be.equal(ZERO_ADDRESS);
-            await expect(factory.allPools(4)).to.be.reverted;
+            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)
+            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)
+            await factory.createPool(token.address, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)
+            const pool0 = await factory.allPools(0)
+            const pool1 = await factory.allPools(1)
+            const pool2 = await factory.allPools(2)
+            const pool3 = await factory.allPools(3)
+            expect(pool0).to.not.be.equal(ZERO_ADDRESS)
+            expect(pool1).to.not.be.equal(ZERO_ADDRESS)
+            expect(pool2).to.not.be.equal(ZERO_ADDRESS)
+            expect(pool3).to.not.be.equal(ZERO_ADDRESS)
+            await expect(factory.allPools(4)).to.be.reverted
         })
 
     })
 
     describe('deposit tests', async() => {
         beforeEach('create pool', async() => {
-            await loadFixture(fixture);
+            await loadFixture(fixture)
         })
 
         it('should correct set new wallets', async() => {
@@ -242,10 +193,10 @@ describe('test', async () => {
                 accounts[14].address
             ]
 
-            await carp.connect(owner).setDistributionAddresses(newWallets);
-            expect(await carp.distributionAddresses(0)).to.be.equal(newWallets[0]);
-            expect(await carp.distributionAddresses(1)).to.be.equal(newWallets[1]);
-            expect(await carp.distributionAddresses(2)).to.be.equal(newWallets[2]);
+            await carp.connect(owner).setDistributionAddresses(newWallets)
+            expect(await carp.distributionAddresses(0)).to.be.equal(newWallets[0])
+            expect(await carp.distributionAddresses(1)).to.be.equal(newWallets[1])
+            expect(await carp.distributionAddresses(2)).to.be.equal(newWallets[2])
 
         })
 
@@ -257,49 +208,49 @@ describe('test', async () => {
                 accounts[13].address,
             ]
 
-            await expect(carp.connect(owner).setDistributionAddresses(newWallets)).to.be.reverted;
+            await expect(carp.connect(owner).setDistributionAddresses(newWallets)).to.be.reverted
         })
 
         it('shouldnt deposit if amount is zero', async() => {
-            const aliceAmount = ethers.utils.parseEther('1');
-            const termAlice = YEAR;
-            await token.connect(alice).approve(carp.address, aliceAmount);
-            await expect(carp.connect(alice).deposit(0, termAlice)).to.be.revertedWith('deposit cannot be zero');
+            const aliceAmount = ethers.utils.parseEther('1')
+            const termAlice = YEAR
+            await token.connect(alice).approve(carp.address, aliceAmount)
+            await expect(carp.connect(alice).deposit(0, termAlice)).to.be.revertedWith('deposit cannot be zero')
         })
 
         it('shouldnt deposit if term is zero', async() => {
-            const aliceAmount = ethers.utils.parseEther('1');
-            const termAlice = YEAR;
-            await token.connect(alice).approve(carp.address, aliceAmount);
-            await expect(carp.connect(alice).deposit(aliceAmount, 0)).to.be.revertedWith('term cannot be zero');
+            const aliceAmount = ethers.utils.parseEther('1')
+            const termAlice = YEAR
+            await token.connect(alice).approve(carp.address, aliceAmount)
+            await expect(carp.connect(alice).deposit(aliceAmount, 0)).to.be.revertedWith('term cannot be zero')
         })
 
         it('should correct deposit', async() => {
-            const poolAddress = await factory.allPools(0);
-            expect(poolAddress).to.not.be.equal(ZERO_ADDRESS);
+            const poolAddress = await factory.allPools(0)
+            expect(poolAddress).to.not.be.equal(ZERO_ADDRESS)
 
-            const aliceAmount = ethers.utils.parseEther('1');
-            const termAlice = YEAR;
-            const aliceBalance = await token.balanceOf(alice.address);
-            await token.connect(alice).approve(carp.address, aliceAmount);
-            const tx = await carp.connect(alice).deposit(aliceAmount, termAlice, {gasLimit: 1e6});
-            const receipt = await tx.wait();
-            const stakeInfo = await carp.stakes(alice.address, 0);
-            const shares = stakeInfo.shares;
-            const lBonusShares = stakeInfo.lBonusShares;
-            const bBonusShares = stakeInfo.bBonusShares;
-            const lastLambda = stakeInfo.lastLambda;
-            const assignedReward = stakeInfo.assignedReward;
-            const amount = stakeInfo.amount;
-            const term = stakeInfo.term;
+            const aliceAmount = ethers.utils.parseEther('1')
+            const termAlice = YEAR
+            const aliceBalance = await token.balanceOf(alice.address)
+            await token.connect(alice).approve(carp.address, aliceAmount)
+            const tx = await carp.connect(alice).deposit(aliceAmount, termAlice, {gasLimit: 1e6})
+            const receipt = await tx.wait()
+            const stakeInfo = await carp.stakes(alice.address, 0)
+            const shares = stakeInfo.shares
+            const lBonusShares = stakeInfo.lBonusShares
+            const bBonusShares = stakeInfo.bBonusShares
+            const lastLambda = stakeInfo.lastLambda
+            const assignedReward = stakeInfo.assignedReward
+            const amount = stakeInfo.amount
+            const term = stakeInfo.term
 
-            const poolLambda = await carp.lambda();
-            const poolTotalShares = await carp.totalShares();
-            const poolCurrentPrice = await carp.currentPrice();
-            const poolInitialPrice = await carp.initialPrice();
+            const poolLambda = await carp.lambda()
+            const poolTotalShares = await carp.totalShares()
+            const poolCurrentPrice = await carp.currentPrice()
+            const poolInitialPrice = await carp.initialPrice()
 
-            const eventName = receipt.events[receipt.events.length - 1].event;
-            const eventDepositor = receipt.events[receipt.events.length - 1].args.depositor;
+            const eventName = receipt.events[receipt.events.length - 1].event
+            const eventDepositor = receipt.events[receipt.events.length - 1].args.depositor
             const eventAmount = receipt.events[receipt.events.length - 1].args.amount;
             const eventTerm = receipt.events[receipt.events.length - 1].args.term;
 
