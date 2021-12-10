@@ -24,9 +24,9 @@ export async function fixture(_signers: Wallet[], _mockProvider: MockProvider) {
     const poolAddress = await factory.allPools(0)
     const carpArtifacts = await artifacts.readArtifact("CarpeDiem")
     const carp = new ethers.Contract(poolAddress, carpArtifacts.abi, ethers.provider)
-    await token.transfer(_signers[3].address, ethers.utils.parseEther('100')) // alice
-    await token.transfer(_signers[4].address, ethers.utils.parseEther('100')) // bob
-    await token.transfer(_signers[5].address, ethers.utils.parseEther('100')) // charlie
-    await token.transfer(_signers[6].address, ethers.utils.parseEther('100')) // darwin
+    await token.transfer(_signers[3].address, ethers.utils.parseEther('1000000')) // alice
+    await token.transfer(_signers[4].address, ethers.utils.parseEther('1000000')) // bob
+    await token.transfer(_signers[5].address, ethers.utils.parseEther('1000000')) // charlie
+    await token.transfer(_signers[6].address, ethers.utils.parseEther('1000000')) // darwin
     return {factory, carp, token}
 }
