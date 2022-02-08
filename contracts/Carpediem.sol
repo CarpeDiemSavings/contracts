@@ -3,14 +3,16 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // Created by Carpe Diem Savings and SFXDX
 
 contract CarpeDiem {
+    using SafeERC20 for IERC20;
+
     address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
 
     uint256 private constant percentBase = 100;
-    uint256 private constant permile = 10000;
     uint256 private constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
     uint256 private constant WEEK = 7 days;
 
@@ -47,6 +49,7 @@ contract CarpeDiem {
         uint256 lastLambda;
         uint256 assignedReward;
     }
+
     mapping(address => StakeInfo[]) public stakes; // user address => StakeInfo
 
     event Deposit(address depositor, uint256 id, uint256 amount, uint32 term);
@@ -67,6 +70,8 @@ contract CarpeDiem {
     );
 
     event NewPrice(uint256 oldPrice, uint256 newPrice);
+
+    event NewDistributionAddresses(address first, address second, address third);
 
     constructor(
         address _factory,
@@ -109,6 +114,11 @@ contract CarpeDiem {
         address[3] calldata _newDistributionAddresses
     ) external onlyOwner {
         distributionAddresses = _newDistributionAddresses;
+        emit NewDistributionAddresses(
+            _newDistributionAddresses[0],
+            _newDistributionAddresses[1],
+            _newDistributionAddresses[2]
+        );
     }
 
     function deposit(uint256 _amount, uint32 _term) external {
@@ -211,7 +221,7 @@ contract CarpeDiem {
                 totalShares;
         }
         delete stakes[msg.sender][_stakeId];
-        token.transfer(msg.sender, stakeInfo.amount + reward - penalty);
+        token.safeTransfer(msg.sender, stakeInfo.amount + reward - penalty);
         emit Withdraw(msg.sender, _stakeId, stakeInfo.amount, reward, penalty);
     }
 
@@ -222,14 +232,14 @@ contract CarpeDiem {
         IERC20 poolToken = token;
         for (uint256 i = 0; i < addresses.length; i++) {
             if (poolPercents[i] > 0)
-                poolToken.transfer(
+                poolToken.safeTransfer(
                     addresses[i],
                     (_commissionAccumulator * poolPercents[i]) /
                         (percentBase - stakersPercent)
                 );
         }
         if (burnPercent > 0)
-            poolToken.transfer(
+            poolToken.safeTransfer(
                 DEAD_WALLET,
                 (_commissionAccumulator * burnPercent) /
                     (percentBase - stakersPercent)
@@ -270,7 +280,7 @@ contract CarpeDiem {
         internal
         returns (uint256 sharesToBuy)
     {
-        token.transferFrom(msg.sender, address(this), _amount); // take tokens
+        token.safeTransferFrom(msg.sender, address(this), _amount); // take tokens
         sharesToBuy = (_amount * MULTIPLIER) / currentPrice; // calculate corresponding amount of shares
     }
 
@@ -307,17 +317,17 @@ contract CarpeDiem {
     ) internal view returns (uint256) {
         uint256 depositAmount = stakes[_user][_stakeId].amount;
         uint32 term = stakes[_user][_stakeId].term;
-        uint32 stakeTs = stakes[_user][_stakeId].startTs;
+        uint32 lastUpdateTs = stakes[_user][_stakeId].lastUpdateTs;
         uint32 blockTimestamp = uint32(block.timestamp);
-        if (stakeTs + term <= blockTimestamp) {
-            if (stakeTs + term + WEEK > blockTimestamp) return 0;
-            uint256 lateWeeks = (blockTimestamp - (stakeTs + term)) / WEEK;
+        if (lastUpdateTs + term <= blockTimestamp) {
+            if (lastUpdateTs + term + WEEK > blockTimestamp) return 0;
+            uint256 lateWeeks = (blockTimestamp - (lastUpdateTs + term)) / WEEK;
             if (lateWeeks >= MAX_PENALTY_DURATION) return _reward;
             return
                 (_reward * PENALTY_PERCENT_PER_WEEK * lateWeeks) / percentBase;
         }
         return
-            ((depositAmount + _reward) * (term - (blockTimestamp - stakeTs))) /
+            ((depositAmount + _reward) * (term - (blockTimestamp - lastUpdateTs))) /
             term;
     }
 
