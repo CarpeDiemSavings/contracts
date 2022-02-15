@@ -42,7 +42,6 @@ contract CarpeDiem {
         uint256 amount;
         uint32 term;
         uint32 startTs;
-        uint32 lastUpdateTs;
         uint256 shares;
         uint256 lBonusShares;
         uint256 bBonusShares;
@@ -134,7 +133,6 @@ contract CarpeDiem {
                 _amount,
                 _term,
                 uint32(block.timestamp),
-                uint32(block.timestamp),
                 shares,
                 lBonusShares,
                 bBonusShares,
@@ -152,7 +150,7 @@ contract CarpeDiem {
         StakeInfo memory stakeInfo = stakes[msg.sender][_stakeId];
         require(stakeInfo.startTs > 0, "stake was deleted");
         require(
-            block.timestamp < stakeInfo.term + stakeInfo.lastUpdateTs,
+            block.timestamp < stakeInfo.term + stakeInfo.startTs,
             "stake matured"
         );
         uint256 extraShares = _buyShares(_amount);
@@ -160,7 +158,7 @@ contract CarpeDiem {
 
         uint256 lBonusShares = _getBonusL(
             extraShares,
-            stakeInfo.lastUpdateTs + stakeInfo.term - blockTimestamp
+            stakeInfo.startTs + stakeInfo.term - blockTimestamp
         );
         uint256 bBonusShares = _getBonusB(
             stakeInfo.shares + extraShares,
@@ -176,9 +174,8 @@ contract CarpeDiem {
         // update stake info
         stakes[msg.sender][_stakeId] = StakeInfo(
             stakeInfo.amount + _amount,
-            stakeInfo.startTs + stakeInfo.term - blockTimestamp,
+            stakeInfo.term,
             stakeInfo.startTs,
-            blockTimestamp,
             stakeInfo.shares + extraShares,
             stakeInfo.lBonusShares + lBonusShares,
             bBonusShares,
@@ -190,7 +187,7 @@ contract CarpeDiem {
             msg.sender,
             _stakeId,
             _amount,
-            stakeInfo.lastUpdateTs + stakeInfo.term - blockTimestamp
+            stakeInfo.startTs + stakeInfo.term - blockTimestamp
         );
     }
 
@@ -317,17 +314,17 @@ contract CarpeDiem {
     ) internal view returns (uint256) {
         uint256 depositAmount = stakes[_user][_stakeId].amount;
         uint32 term = stakes[_user][_stakeId].term;
-        uint32 lastUpdateTs = stakes[_user][_stakeId].lastUpdateTs;
+        uint32 startTs = stakes[_user][_stakeId].startTs;
         uint32 blockTimestamp = uint32(block.timestamp);
-        if (lastUpdateTs + term <= blockTimestamp) {
-            if (lastUpdateTs + term + WEEK > blockTimestamp) return 0;
-            uint256 lateWeeks = (blockTimestamp - (lastUpdateTs + term)) / WEEK;
+        if (startTs + term <= blockTimestamp) {
+            if (startTs + term + WEEK > blockTimestamp) return 0;
+            uint256 lateWeeks = (blockTimestamp - (startTs + term)) / WEEK;
             if (lateWeeks >= MAX_PENALTY_DURATION) return _reward;
             return
                 (_reward * PENALTY_PERCENT_PER_WEEK * lateWeeks) / percentBase;
         }
         return
-            ((depositAmount + _reward) * (term - (blockTimestamp - lastUpdateTs))) /
+            ((depositAmount + _reward) * (term - (blockTimestamp - startTs))) /
             term;
     }
 
