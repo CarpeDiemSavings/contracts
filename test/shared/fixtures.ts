@@ -28,5 +28,6 @@ export async function fixture(_signers: Wallet[], _mockProvider: MockProvider) {
     await token.transfer(_signers[4].address, ethers.utils.parseEther('1000000')) // bob
     await token.transfer(_signers[5].address, ethers.utils.parseEther('1000000')) // charlie
     await token.transfer(_signers[6].address, ethers.utils.parseEther('1000000')) // darwin
+    await token.transfer(_signers[8].address, ethers.utils.parseEther('1000000')) // mike
     return {factory, carp, token}
 }
