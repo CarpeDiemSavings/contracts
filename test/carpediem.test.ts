@@ -186,31 +186,6 @@ describe('test', async () => {
             await loadFixture(fixture)
         })
 
-        it('should correct set new wallets', async() => {
-            const newWallets = [
-                accounts[12].address,
-                accounts[13].address,
-                accounts[14].address
-            ]
-
-            await carp.connect(owner).setDistributionAddresses(newWallets)
-            expect(await carp.distributionAddresses(0)).to.be.equal(newWallets[0])
-            expect(await carp.distributionAddresses(1)).to.be.equal(newWallets[1])
-            expect(await carp.distributionAddresses(2)).to.be.equal(newWallets[2])
-
-        })
-
-        it('shouldnt set new wallets if array has incorrect length', async() => {
-            const newWallets = [
-                accounts[10].address,
-                accounts[11].address,
-                accounts[12].address,
-                accounts[13].address,
-            ]
-
-            await expect(carp.connect(owner).setDistributionAddresses(newWallets)).to.be.reverted
-        })
-
         it('shouldnt deposit if amount is zero', async() => {
             const aliceAmount = ethers.utils.parseEther('1')
             const termAlice = YEAR
