@@ -100,14 +100,6 @@ contract CarpeDiem {
         return factory.owner();
     }
 
-    modifier onlyOwner() {
-        require(
-            factory.owner() == msg.sender,
-            "Ownable: caller is not the owner"
-        );
-        _;
-    }
-
     function deposit(uint256 _amount, uint32 _term) external {
         require(_amount > 0, "deposit cannot be zero");
         require(_term > 0, "term cannot be zero");
