@@ -76,8 +76,6 @@ contract CarpeDiem {
 
     event NewPrice(uint256 oldPrice, uint256 newPrice);
 
-    event NewDistributionAddresses(address first, address second, address third);
-
     constructor(
         address _factory,
         address _token,
@@ -105,25 +103,6 @@ contract CarpeDiem {
 
     function owner() public view virtual returns (address) {
         return factory.owner();
-    }
-
-    modifier onlyOwner() {
-        require(
-            factory.owner() == msg.sender,
-            "Ownable: caller is not the owner"
-        );
-        _;
-    }
-
-    function setDistributionAddresses(
-        address[3] calldata _newDistributionAddresses
-    ) external onlyOwner {
-        distributionAddresses = _newDistributionAddresses;
-        emit NewDistributionAddresses(
-            _newDistributionAddresses[0],
-            _newDistributionAddresses[1],
-            _newDistributionAddresses[2]
-        );
     }
 
     function deposit(uint256 _amount, uint32 _term) external {
