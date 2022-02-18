@@ -790,7 +790,7 @@ describe('test', async () => {
 
                     const stakeAmount = stakeInfo.amount
                     const stakeTerm = stakeInfo.term
-                    const stakeTs = BigNumber.from(stakeInfo.lastUpdateTs)
+                    const stakeTs = BigNumber.from(stakeInfo.startTs)
 
                     const poolTotalShares = await carp.totalShares()
 
@@ -815,8 +815,6 @@ describe('test', async () => {
                     expect(userAssignedReward).to.be.gte(calculatedUserAssignedReward.sub(1))
                     expect(userAssignedReward).to.be.lte(calculatedUserAssignedReward.add(1))
                     expect(stakeAmount).to.be.equal(aliceAmount.add(extraAmount))
-                    expect(stakeTerm).to.be.equal(stakeTs.add(stakeTerm).sub(timestamp))
-                    expect(stakeTs).to.be.equal(timestamp)
                     expect(poolTotalShares).to.be.equal(S_charlie.add(sharesWithBonuses))
 
                     expect(eventName).to.be.equal('UpgradedStake')
