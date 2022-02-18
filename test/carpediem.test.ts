@@ -870,6 +870,34 @@ describe('test', async () => {
 
                         expect((charlieBalanceAfter.sub(charlieBalanceBefore).div(HUN))).to.be.equal(charlieAmount.div(HUN))
                     })
+
+                    describe("dead stake tests", async() => {
+                        const mike = accounts[8]
+                        const simon = accounts[9]
+                        const mikeAmount = ethers.utils.parseEther('1')
+                        const mikeTerm = YEAR
+                        let mikeBalanceBefore = BigNumber.from('0')
+                        let totalSharesBefore = BigNumber.from('0')
+
+                        beforeEach('mike deposits', async() => {
+                            mikeBalanceBefore = await token.balanceOf(mike.address)
+                            totalSharesBefore = await carp.totalShares()
+                            await token.connect(mike).approve(carp.address, charlieAmount)
+                            await carp.connect(mike).deposit(mikeAmount, mikeTerm)
+                        })
+
+                        it('shouldn\'t remove stake before it\'s dead', async() => {
+                            await expect(carp.connect(simon).removeDeadStake(mike.address, 0)).to.be.revertedWith('stakeAlive')
+                        })
+
+                        it('should remove stake after it\'s dead', async() => {
+                            await ethers.provider.send('evm_increaseTime', [2.5 * YEAR])
+                            await carp.connect(simon).removeDeadStake(mike.address, 0)
+                            expect(await token.balanceOf(mike.address)).to.be.equal(mikeBalanceBefore)
+                            expect(await carp.totalShares()).to.be.equal(totalSharesBefore)
+                            expect((await carp.stakes(mike.address, 0)).amount).to.be.equal(0)
+                        })
+                    })
                 })
             })
         })

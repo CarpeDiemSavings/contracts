@@ -68,6 +68,12 @@ contract CarpeDiem {
         uint256 penalty
     );
 
+    event StakeRemoval(
+        address who,
+        uint256 id,
+        uint256 deposit
+    );
+
     event NewPrice(uint256 oldPrice, uint256 newPrice);
 
     event NewDistributionAddresses(address first, address second, address third);
@@ -220,6 +226,30 @@ contract CarpeDiem {
         delete stakes[msg.sender][_stakeId];
         token.safeTransfer(msg.sender, stakeInfo.amount + reward - penalty);
         emit Withdraw(msg.sender, _stakeId, stakeInfo.amount, reward, penalty);
+    }
+
+    function removeDeadStake(address _user, uint256 _stakeId) external {
+        require(_stakeId < stakes[_user].length, "noSuchStake");
+        StakeInfo memory stakeInfo = stakes[_user][_stakeId];
+        require(stakeInfo.amount > 0, "stakeWithdrawn");
+        require(
+            uint32(block.timestamp) >= stakeInfo.startTs + stakeInfo.term + 365 days,
+            "stakeAlive"
+        );
+
+        _changeSharesPrice(
+            stakes[_user][_stakeId].amount,
+            stakes[_user][_stakeId].shares
+        );
+        totalShares -= (
+            stakeInfo.shares + stakeInfo.bBonusShares + stakeInfo.lBonusShares
+        );
+        if (totalShares == 0) {
+            lambda = 0;
+        }
+        delete stakes[_user][_stakeId];
+        token.safeTransfer(_user, stakeInfo.amount);
+        emit StakeRemoval(_user, _stakeId, stakeInfo.amount);
     }
 
     function distributePenalty() external {
