@@ -42,6 +42,10 @@ describe('incorrect deployment', async() => {
             community.address
         ]
     })
+
+    it('should deploy token correctly', async() => {
+        expect(await token.balanceOf(owner.address)).to.be.equal(TOTALSUPPLY)
+    })
     it('shouldnt deploy pool with zero token address', async() => {
         await expect(factory.createPool(ZERO_ADDRESS, INITIAL_PRICE, BBonus, LBonus, BBonusMaxPercent, LBonusMaxPercent, penaltyPercents, wallets)).to.be.revertedWith('token cannot be zero')
     })
