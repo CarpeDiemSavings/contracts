@@ -21,6 +21,10 @@ contract CarpediemFactory is Ownable {
         uint256 lBonusMaxPercent
     );
 
+    function allPoolsLength() external view returns (uint256) {
+        return allPools.length;
+    }
+
     function createPool(
         address _token,
         uint256 _initialPrice,
