@@ -180,6 +180,8 @@ describe('test', async () => {
             expect(pool1).to.not.be.equal(ZERO_ADDRESS)
             expect(pool2).to.not.be.equal(ZERO_ADDRESS)
             expect(pool3).to.not.be.equal(ZERO_ADDRESS)
+            expect(await factory.allPoolsLength()).to.be.equal(4)
+            expect(await factory.poolsByTokenLength(token.address)).to.be.equal(4)
             await expect(factory.allPools(4)).to.be.reverted
         })
 

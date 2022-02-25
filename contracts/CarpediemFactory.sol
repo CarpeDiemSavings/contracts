@@ -8,6 +8,7 @@ import "./Carpediem.sol";
 
 contract CarpediemFactory is Ownable {
     address[] public allPools;
+    mapping(address => address[]) public poolsByToken;
 
     uint256 constant percentBase = 100;
 
@@ -23,6 +24,10 @@ contract CarpediemFactory is Ownable {
 
     function allPoolsLength() external view returns (uint256) {
         return allPools.length;
+    }
+
+    function poolsByTokenLength(address _token) external view returns (uint256) {
+        return poolsByToken[_token].length;
     }
 
     function createPool(
@@ -64,6 +69,7 @@ contract CarpediemFactory is Ownable {
             _distributionAddresses
         );
         allPools.push(address(pool));
+        poolsByToken[_token].push(address(pool));
         emit NewPool(
             _token,
             address(pool),
