@@ -4,10 +4,11 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // Created by Carpe Diem Savings and SFXDX
 
-contract CarpeDiem {
+contract CarpeDiem is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
@@ -129,7 +130,7 @@ contract CarpeDiem {
         emit Deposit(msg.sender, stakes[msg.sender].length - 1, _amount, _term);
     }
 
-    function upgradeStake(uint256 _stakeId, uint256 _amount) external {
+    function upgradeStake(uint256 _stakeId, uint256 _amount) external nonReentrant {
         require(_amount > 0, "deposit cannot be zero");
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
         StakeInfo memory stakeInfo = stakes[msg.sender][_stakeId];
@@ -231,7 +232,7 @@ contract CarpeDiem {
         emit StakeRemoval(_user, _stakeId, stakeInfo.amount);
     }
 
-    function distributePenalty() external {
+    function distributePenalty() external nonReentrant {
         address[3] memory addresses = distributionAddresses;
         uint16[3] memory poolPercents = distributionPercents;
         uint256 _commissionAccumulator = commissionAccumulator;
