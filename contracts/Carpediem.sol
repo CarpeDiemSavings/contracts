@@ -21,7 +21,6 @@ contract CarpeDiem {
         100 / PENALTY_PERCENT_PER_WEEK;
     uint256 public constant MAX_PRICE = 1e12 * MULTIPLIER; // max price (1 share for 1 trillion tokens) to prevent overflow
 
-    Ownable public immutable factory;
     IERC20 public immutable token;
     uint256 public immutable bBonusMaxPercent; // maximum value of B bonus
     uint256 public immutable lBonusMaxPercent; // maximum value of L bonus
@@ -77,13 +76,11 @@ contract CarpeDiem {
     event NewPrice(uint256 oldPrice, uint256 newPrice);
 
     constructor(
-        address _factory,
         address _token,
         uint256[5] memory _params,
         uint16[5] memory _distributionPercents,
         address[3] memory _distributionAddresses
     ) {
-        factory = Ownable(_factory);
         token = IERC20(_token);
         lambda = 0;
         totalShares = 0;
@@ -99,10 +96,6 @@ contract CarpeDiem {
         burnPercent = _distributionPercents[3];
         stakersPercent = _distributionPercents[4];
         distributionAddresses = _distributionAddresses;
-    }
-
-    function owner() public view virtual returns (address) {
-        return factory.owner();
     }
 
     function deposit(uint256 _amount, uint32 _term) external {
