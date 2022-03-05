@@ -4,15 +4,16 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // Created by Carpe Diem Savings and SFXDX
 
-contract CarpeDiem {
+contract CarpeDiem is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     address constant DEAD_WALLET = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 private constant percentBase = 100;
+    uint256 private constant PERCENT_BASE = 100;
     uint256 private constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
     uint256 private constant WEEK = 7 days;
 
@@ -39,7 +40,7 @@ contract CarpeDiem {
 
     struct StakeInfo {
         uint256 amount;
-        uint32 term;
+        uint32 duration;
         uint32 startTs;
         uint256 shares;
         uint256 lBonusShares;
@@ -50,13 +51,13 @@ contract CarpeDiem {
 
     mapping(address => StakeInfo[]) public stakes; // user address => StakeInfo
 
-    event Deposit(address depositor, uint256 id, uint256 amount, uint32 term);
+    event Deposit(address depositor, uint256 id, uint256 amount, uint32 duration);
 
-    event UpgradedStake(
+    event StakeUpgraded(
         address depositor,
         uint256 id,
         uint256 amount,
-        uint32 term
+        uint32 duration
     );
 
     event Withdraw(
@@ -67,7 +68,7 @@ contract CarpeDiem {
         uint256 penalty
     );
 
-    event StakeRemoval(
+    event StakeRemoved(
         address who,
         uint256 id,
         uint256 deposit
@@ -98,18 +99,18 @@ contract CarpeDiem {
         distributionAddresses = _distributionAddresses;
     }
 
-    function deposit(uint256 _amount, uint32 _term) external {
+    function deposit(uint256 _amount, uint32 _duration) external {
         require(_amount > 0, "deposit cannot be zero");
-        require(_term > 0, "term cannot be zero");
-        require(_term <= 5555 days, "huge term");
+        require(_duration > 0, "duration cannot be zero");
+        require(_duration <= 5555 days, "huge duration");
         uint256 shares = _buyShares(_amount);
-        uint256 lBonusShares = _getBonusL(shares, _term);
+        uint256 lBonusShares = _getBonusL(shares, _duration);
         uint256 bBonusShares = _getBonusB(shares, _amount);
         totalShares = totalShares + shares + lBonusShares + bBonusShares;
         stakes[msg.sender].push(
             StakeInfo(
                 _amount,
-                _term,
+                _duration,
                 uint32(block.timestamp),
                 shares,
                 lBonusShares,
@@ -119,16 +120,16 @@ contract CarpeDiem {
             )
         );
 
-        emit Deposit(msg.sender, stakes[msg.sender].length - 1, _amount, _term);
+        emit Deposit(msg.sender, stakes[msg.sender].length - 1, _amount, _duration);
     }
 
-    function upgradeStake(uint256 _stakeId, uint256 _amount) external {
+    function upgradeStake(uint256 _stakeId, uint256 _amount) external nonReentrant {
         require(_amount > 0, "deposit cannot be zero");
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
         StakeInfo memory stakeInfo = stakes[msg.sender][_stakeId];
         require(stakeInfo.startTs > 0, "stake was deleted");
         require(
-            block.timestamp < stakeInfo.term + stakeInfo.startTs,
+            block.timestamp < stakeInfo.duration + stakeInfo.startTs,
             "stake matured"
         );
         uint256 extraShares = _buyShares(_amount);
@@ -136,7 +137,7 @@ contract CarpeDiem {
 
         uint256 lBonusShares = _getBonusL(
             extraShares,
-            stakeInfo.startTs + stakeInfo.term - blockTimestamp
+            stakeInfo.startTs + stakeInfo.duration - blockTimestamp
         );
         uint256 bBonusShares = _getBonusB(
             stakeInfo.shares + extraShares,
@@ -152,7 +153,7 @@ contract CarpeDiem {
         // update stake info
         stakes[msg.sender][_stakeId] = StakeInfo(
             stakeInfo.amount + _amount,
-            stakeInfo.term,
+            stakeInfo.duration,
             stakeInfo.startTs,
             stakeInfo.shares + extraShares,
             stakeInfo.lBonusShares + lBonusShares,
@@ -161,11 +162,11 @@ contract CarpeDiem {
             getReward(msg.sender, _stakeId)
         );
 
-        emit UpgradedStake(
+        emit StakeUpgraded(
             msg.sender,
             _stakeId,
             _amount,
-            stakeInfo.startTs + stakeInfo.term - blockTimestamp
+            stakeInfo.startTs + stakeInfo.duration - blockTimestamp
         );
     }
 
@@ -180,8 +181,8 @@ contract CarpeDiem {
             stakeInfo.shares
         );
         commissionAccumulator +=
-            (penalty * (percentBase - stakersPercent)) /
-            percentBase;
+            (penalty * (PERCENT_BASE - stakersPercent)) /
+            PERCENT_BASE;
         totalShares =
             totalShares -
             stakeInfo.shares -
@@ -192,7 +193,7 @@ contract CarpeDiem {
         } else {
             lambda +=
                 (penalty * MULTIPLIER * stakersPercent) /
-                percentBase /
+                PERCENT_BASE /
                 totalShares;
         }
         delete stakes[msg.sender][_stakeId];
@@ -205,7 +206,7 @@ contract CarpeDiem {
         StakeInfo memory stakeInfo = stakes[_user][_stakeId];
         require(stakeInfo.amount > 0, "stakeWithdrawn");
         require(
-            uint32(block.timestamp) >= stakeInfo.startTs + stakeInfo.term + 365 days,
+            uint32(block.timestamp) >= stakeInfo.startTs + stakeInfo.duration + 365 days,
             "stakeAlive"
         );
 
@@ -221,10 +222,10 @@ contract CarpeDiem {
         }
         delete stakes[_user][_stakeId];
         token.safeTransfer(_user, stakeInfo.amount);
-        emit StakeRemoval(_user, _stakeId, stakeInfo.amount);
+        emit StakeRemoved(_user, _stakeId, stakeInfo.amount);
     }
 
-    function distributePenalty() external {
+    function distributePenalty() external nonReentrant {
         address[3] memory addresses = distributionAddresses;
         uint16[3] memory poolPercents = distributionPercents;
         uint256 _commissionAccumulator = commissionAccumulator;
@@ -234,14 +235,14 @@ contract CarpeDiem {
                 poolToken.safeTransfer(
                     addresses[i],
                     (_commissionAccumulator * poolPercents[i]) /
-                        (percentBase - stakersPercent)
+                        (PERCENT_BASE - stakersPercent)
                 );
         }
         if (burnPercent > 0)
             poolToken.safeTransfer(
                 DEAD_WALLET,
                 (_commissionAccumulator * burnPercent) /
-                    (percentBase - stakersPercent)
+                    (PERCENT_BASE - stakersPercent)
             );
 
         commissionAccumulator = 0;
@@ -292,21 +293,21 @@ contract CarpeDiem {
         if (_deposit < poolBBonus)
             return
                 (_shares * bBonusMaxPercent * _deposit) /
-                (poolBBonus * percentBase);
-        return (bBonusMaxPercent * _shares) / percentBase;
+                (poolBBonus * PERCENT_BASE);
+        return (bBonusMaxPercent * _shares) / PERCENT_BASE;
     }
 
-    function _getBonusL(uint256 _shares, uint32 _term)
+    function _getBonusL(uint256 _shares, uint32 _duration)
         internal
         view
         returns (uint256)
     {
         uint256 poolLBonus = lBonusPeriod;
-        if (_term < poolLBonus)
+        if (_duration < poolLBonus)
             return
-                (_shares * lBonusMaxPercent * _term) /
-                (poolLBonus * percentBase);
-        return (lBonusMaxPercent * _shares) / percentBase;
+                (_shares * lBonusMaxPercent * _duration) /
+                (poolLBonus * PERCENT_BASE);
+        return (lBonusMaxPercent * _shares) / PERCENT_BASE;
     }
 
     function _getPenalty(
@@ -315,19 +316,19 @@ contract CarpeDiem {
         uint256 _stakeId
     ) internal view returns (uint256) {
         uint256 depositAmount = stakes[_user][_stakeId].amount;
-        uint32 term = stakes[_user][_stakeId].term;
+        uint32 duration = stakes[_user][_stakeId].duration;
         uint32 startTs = stakes[_user][_stakeId].startTs;
         uint32 blockTimestamp = uint32(block.timestamp);
-        if (startTs + term <= blockTimestamp) {
-            if (startTs + term + WEEK > blockTimestamp) return 0;
-            uint256 lateWeeks = (blockTimestamp - (startTs + term)) / WEEK;
+        if (startTs + duration <= blockTimestamp) {
+            if (startTs + duration + WEEK > blockTimestamp) return 0;
+            uint256 lateWeeks = (blockTimestamp - (startTs + duration)) / WEEK;
             if (lateWeeks >= MAX_PENALTY_DURATION) return _reward;
             return
-                (_reward * PENALTY_PERCENT_PER_WEEK * lateWeeks) / percentBase;
+                (_reward * PENALTY_PERCENT_PER_WEEK * lateWeeks) / PERCENT_BASE;
         }
         return
-            ((depositAmount + _reward) * (term - (blockTimestamp - startTs))) /
-            term;
+            ((depositAmount + _reward) * (duration - (blockTimestamp - startTs))) /
+            duration;
     }
 
     function _changeSharesPrice(uint256 _profit, uint256 _shares) private {
