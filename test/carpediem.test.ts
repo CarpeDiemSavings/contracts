@@ -126,9 +126,7 @@ describe('test', async () => {
             expect(poolToken).to.be.equal(token.address)
 
             const factoryOwner = await factory.owner()
-            const carpOwner = await carp.owner()
 
-            expect(factoryOwner).to.be.equal(carpOwner)
             const poolLambda = await carp.lambda()
             const poolTotalShares = await carp.totalShares()
             const poolCurrentPrice = await carp.currentPrice()

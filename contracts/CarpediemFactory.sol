@@ -56,7 +56,6 @@ contract CarpediemFactory is Ownable {
             );
         }
         CarpeDiem pool = new CarpeDiem(
-            address(this),
             _token,
             [
                 _initialPrice,
