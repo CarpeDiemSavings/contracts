@@ -261,7 +261,7 @@ contract CarpeDiem is ReentrancyGuard {
     }
 
     function getPenalty(address _user, uint256 _stakeId)
-        public
+        external
         view
         returns (uint256)
     {
