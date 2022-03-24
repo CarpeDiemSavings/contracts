@@ -231,6 +231,7 @@ contract CarpeDiem is ReentrancyGuard {
                 PERCENT_BASE /
                 totalShares;
         }
+
         delete stakes[_user][_stakeId];
         token.safeTransfer(_user, stakeInfo.amount);
         emit StakeRemoved(_user, _stakeId, stakeInfo.amount);
@@ -260,7 +261,7 @@ contract CarpeDiem is ReentrancyGuard {
     }
 
     function getPenalty(address _user, uint256 _stakeId)
-        external
+        public
         view
         returns (uint256)
     {
