@@ -211,7 +211,7 @@ contract CarpeDiem is ReentrancyGuard {
         );
         
         // Stake is overdue, so the penalty is equal to reward
-        uint256 penalty = getReward(msg.sender, _stakeId);
+        uint256 penalty = getReward(_user, _stakeId);
 
         _changeSharesPrice(
             stakes[_user][_stakeId].amount,
