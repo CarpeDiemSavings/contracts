@@ -209,17 +209,29 @@ contract CarpeDiem is ReentrancyGuard {
             uint32(block.timestamp) >= stakeInfo.startTs + stakeInfo.duration + 365 days,
             "stakeAlive"
         );
+        
+        // Stake is overdue, so the penalty is equal to reward
+        uint256 penalty = getReward(_user, _stakeId);
 
         _changeSharesPrice(
             stakes[_user][_stakeId].amount,
             stakes[_user][_stakeId].shares
         );
+        commissionAccumulator +=
+            (penalty * (PERCENT_BASE - stakersPercent)) /
+            PERCENT_BASE;
         totalShares -= (
             stakeInfo.shares + stakeInfo.bBonusShares + stakeInfo.lBonusShares
         );
         if (totalShares == 0) {
             lambda = 0;
+        } else {
+            lambda +=
+                (penalty * MULTIPLIER * stakersPercent) /
+                PERCENT_BASE /
+                totalShares;
         }
+
         delete stakes[_user][_stakeId];
         token.safeTransfer(_user, stakeInfo.amount);
         emit StakeRemoved(_user, _stakeId, stakeInfo.amount);

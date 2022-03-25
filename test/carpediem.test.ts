@@ -804,7 +804,6 @@ describe('test', async () => {
 
                 describe('late reward tests', async() => {
                     it('should correct calculate penalty if claimed late ', async() => {
-
                         const lateWeeks = 2
                         const bigLateWeeks = BigNumber.from(lateWeeks)
                         const durationBeforeCharlieWithdraw = 3.5*YEAR + lateWeeks*WEEK
@@ -839,7 +838,6 @@ describe('test', async () => {
                     })
 
                     it('should withdraw only deposit if claim is too late', async() => {
-
                         const latePeriod = 51*WEEK
                         const durationBeforeCharlieWithdraw = 3.5*YEAR + latePeriod
                         await ethers.provider.send('evm_increaseTime', [durationBeforeCharlieWithdraw])
@@ -854,15 +852,25 @@ describe('test', async () => {
                         const mike = accounts[8]
                         const simon = accounts[9]
                         const mikeAmount = ethers.utils.parseEther('1')
-                        const mikeduration = YEAR
+                        const mikeDuration = YEAR
+                        const simonAmount = ethers.utils.parseEther('1')
+                        const simonDuration = YEAR
                         let mikeBalanceBefore = BigNumber.from('0')
                         let totalSharesBefore = BigNumber.from('0')
 
                         beforeEach('mike deposits', async() => {
                             mikeBalanceBefore = await token.balanceOf(mike.address)
                             totalSharesBefore = await carp.totalShares()
-                            await token.connect(mike).approve(carp.address, charlieAmount)
-                            await carp.connect(mike).deposit(mikeAmount, mikeduration)
+                            await token.connect(mike).approve(carp.address, mikeAmount)
+                            await token.connect(simon).approve(carp.address, simonAmount)
+                            await carp.connect(mike).deposit(mikeAmount, mikeDuration)
+                            await carp.connect(simon).deposit(simonAmount, simonDuration)
+                            let simonLambdaBefore = await carp.lambda()
+                            await carp.connect(simon).withdraw(0)
+                            let simonLambdaAfter = await carp.lambda()
+
+                            // Lambda should grow before removing dead stake
+                            expect(simonLambdaAfter.gt(simonLambdaBefore)).to.be.true
                         })
 
                         it('shouldn\'t remove stake before it\'s dead', async() => {
@@ -870,11 +878,16 @@ describe('test', async () => {
                         })
 
                         it('should remove stake after it\'s dead', async() => {
-                            await ethers.provider.send('evm_increaseTime', [2.5 * YEAR])
+                            let mikeLambdaBefore = await carp.lambda()
+                            await ethers.provider.send('evm_increaseTime', [3 * YEAR])
                             await carp.connect(simon).removeDeadStake(mike.address, 0)
+                            let mikeTotalShares = await carp.totalShares()
+                            let mikeLambdaAfter = await carp.lambda()
+
                             expect(await token.balanceOf(mike.address)).to.be.equal(mikeBalanceBefore)
-                            expect(await carp.totalShares()).to.be.equal(totalSharesBefore)
+                            expect(mikeTotalShares).to.be.equal(totalSharesBefore)
                             expect((await carp.stakes(mike.address, 0)).amount).to.be.equal(0)
+                            expect(mikeLambdaAfter.gt(mikeLambdaBefore)).to.be.true
                         })
                     })
                 })
