@@ -75,6 +75,7 @@ contract CarpeDiem is ReentrancyGuard {
     );
 
     event NewPrice(uint256 oldPrice, uint256 newPrice);
+    event SharesChanged(uint256 oldShares, uint256 newShares);
 
     constructor(
         address _token,
@@ -99,6 +100,10 @@ contract CarpeDiem is ReentrancyGuard {
         distributionAddresses = _distributionAddresses;
     }
 
+    function getStakesLength(address _staker) external view returns (uint256) {
+        return stakes[_staker].length;
+    }
+
     function deposit(uint256 _amount, uint32 _duration) external {
         require(_amount > 0, "deposit cannot be zero");
         require(_duration > 0, "duration cannot be zero");
@@ -106,7 +111,9 @@ contract CarpeDiem is ReentrancyGuard {
         uint256 shares = _buyShares(_amount);
         uint256 lBonusShares = _getBonusL(shares, _duration);
         uint256 bBonusShares = _getBonusB(shares, _amount);
-        totalShares = totalShares + shares + lBonusShares + bBonusShares;
+
+        emit SharesChanged(totalShares, totalShares + shares + lBonusShares + bBonusShares);
+        totalShares += shares + lBonusShares + bBonusShares;
         stakes[msg.sender].push(
             StakeInfo(
                 _amount,
@@ -144,12 +151,10 @@ contract CarpeDiem is ReentrancyGuard {
             stakeInfo.amount + _amount
         );
 
-        totalShares =
-            totalShares +
-            extraShares +
-            bBonusShares +
-            lBonusShares -
-            stakeInfo.bBonusShares;
+        emit SharesChanged(totalShares,
+            totalShares + extraShares + bBonusShares + lBonusShares - stakeInfo.bBonusShares);
+        totalShares += (extraShares + bBonusShares + lBonusShares - stakeInfo.bBonusShares);
+
         // update stake info
         stakes[msg.sender][_stakeId] = StakeInfo(
             stakeInfo.amount + _amount,
@@ -183,11 +188,10 @@ contract CarpeDiem is ReentrancyGuard {
         commissionAccumulator +=
             (penalty * (PERCENT_BASE - stakersPercent)) /
             PERCENT_BASE;
-        totalShares =
-            totalShares -
-            stakeInfo.shares -
-            stakeInfo.bBonusShares -
-            stakeInfo.lBonusShares;
+
+        emit SharesChanged(totalShares,
+            totalShares - (stakeInfo.shares + stakeInfo.bBonusShares + stakeInfo.lBonusShares));
+        totalShares -= (stakeInfo.shares + stakeInfo.bBonusShares + stakeInfo.lBonusShares);
         if (totalShares == 0) {
             lambda = 0;
         } else {
@@ -220,6 +224,9 @@ contract CarpeDiem is ReentrancyGuard {
         commissionAccumulator +=
             (penalty * (PERCENT_BASE - stakersPercent)) /
             PERCENT_BASE;
+            
+        emit SharesChanged(totalShares,
+            totalShares - (stakeInfo.shares + stakeInfo.bBonusShares + stakeInfo.lBonusShares));
         totalShares -= (
             stakeInfo.shares + stakeInfo.bBonusShares + stakeInfo.lBonusShares
         );
