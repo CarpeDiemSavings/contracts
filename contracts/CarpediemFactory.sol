@@ -10,7 +10,7 @@ contract CarpediemFactory is Ownable {
     address[] public allPools;
     mapping(address => address[]) public poolsByToken;
 
-    uint256 constant percentBase = 100;
+    uint256 constant private percentBase = 100;
 
     event NewPool(
         address token,

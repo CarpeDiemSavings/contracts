@@ -84,8 +84,6 @@ contract CarpeDiem is ReentrancyGuard {
         address[3] memory _distributionAddresses
     ) {
         token = IERC20(_token);
-        lambda = 0;
-        totalShares = 0;
         currentPrice = _params[0];
         initialPrice = _params[0];
         bBonusAmount = _params[1];
