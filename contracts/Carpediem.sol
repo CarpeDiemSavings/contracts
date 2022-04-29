@@ -102,7 +102,7 @@ contract CarpeDiem is ReentrancyGuard {
         return stakes[_staker].length;
     }
 
-    function deposit(uint256 _amount, uint32 _duration) external {
+    function deposit(uint256 _amount, uint32 _duration) external nonReentrant {
         require(_amount > 0, "deposit cannot be zero");
         require(_duration > 0, "duration cannot be zero");
         require(_duration <= 5555 days, "huge duration");
