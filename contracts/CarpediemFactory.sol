@@ -13,7 +13,7 @@ contract CarpediemFactory is Ownable {
     uint256 constant private percentBase = 100;
 
     event NewPool(
-        address token,
+        address indexed token,
         address poolAddress,
         uint256 initialPrice,
         uint256 bBonusAmount,

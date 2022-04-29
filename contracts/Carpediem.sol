@@ -51,26 +51,26 @@ contract CarpeDiem is ReentrancyGuard {
 
     mapping(address => StakeInfo[]) public stakes; // user address => StakeInfo
 
-    event Deposit(address depositor, uint256 id, uint256 amount, uint32 duration);
+    event Deposit(address indexed depositor, uint256 id, uint256 amount, uint32 duration);
 
     event StakeUpgraded(
-        address depositor,
-        uint256 id,
+        address indexed depositor,
+        uint256 indexed id,
         uint256 amount,
         uint32 duration
     );
 
     event Withdraw(
-        address who,
-        uint256 id,
+        address indexed who,
+        uint256 indexed id,
         uint256 deposit,
         uint256 reward,
         uint256 penalty
     );
 
     event StakeRemoved(
-        address who,
-        uint256 id,
+        address indexed who,
+        uint256 indexed id,
         uint256 deposit
     );
 
