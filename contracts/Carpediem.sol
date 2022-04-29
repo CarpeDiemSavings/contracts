@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // Created by Carpe Diem Savings and SFXDX
 
+/// @title A staking pool for any token
 contract CarpeDiem is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -17,25 +18,44 @@ contract CarpeDiem is ReentrancyGuard {
     uint256 private constant MULTIPLIER = 1e18; // used for multiplying numerators in lambda and price calculations
     uint256 private constant WEEK = 7 days;
 
-    uint256 public constant PENALTY_PERCENT_PER_WEEK = 2; // amount of penalty percents applied to reward every late week
+    /// @notice amount of penalty percents applied to reward every late week
+    uint256 public constant PENALTY_PERCENT_PER_WEEK = 2;
+    /// @notice time before penalty will became equal to reward
     uint256 public constant MAX_PENALTY_DURATION =
         100 / PENALTY_PERCENT_PER_WEEK;
-    uint256 public constant MAX_PRICE = 1e12 * MULTIPLIER; // max price (1 share for 1 trillion tokens) to prevent overflow
+    /// @notice max price (1 share for 1 trillion tokens) to prevent overflow
+    uint256 public constant MAX_PRICE = 1e12 * MULTIPLIER;
 
+    /// @notice address of pool's token
     IERC20 public immutable token;
-    uint256 public immutable bBonusMaxPercent; // maximum value of B bonus
-    uint256 public immutable lBonusMaxPercent; // maximum value of L bonus
-    uint256 public immutable lBonusPeriod; // period for maximum L bonus
-    uint256 public immutable initialPrice; // initial shares price
-    uint256 public immutable bBonusAmount; // amount for maximum B bonus
+    /// @notice maximum value of B bonus
+    uint256 public immutable bBonusMaxPercent;
+    /// @notice maximum value of L bonus
+    uint256 public immutable lBonusMaxPercent;
+    /// @notice period for maximum L bonus
+    uint256 public immutable lBonusPeriod;
+    /// @notice initial shares price
+    uint256 public immutable initialPrice;
+    /// @notice amount for maximum B bonus
+    uint256 public immutable bBonusAmount;
+
+    /// @notice commission to burn
     uint256 public immutable burnPercent;
+
+    /// @notice commission for stakers
     uint256 public immutable stakersPercent;
 
-    uint256 public totalShares; // total shares with the bonuses in the pool
-    uint256 public currentPrice; // current shares price
+    /// @notice total shares with the bonuses in the pool
+    uint256 public totalShares;
+    /// @notice current shares price
+    uint256 public currentPrice;
+    /// @notice stored penalties
     uint256 public lambda;
-    uint16[3] public distributionPercents; // percents to distribute
-    address[3] public distributionAddresses; // addresses for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
+    /// @notice percents to distribute
+    uint16[3] public distributionPercents;
+    /// @notice addresses for penalty distribution. wallet[0] corresponds to reward pool and can be equal any address != address(0)
+    address[3] public distributionAddresses;
+    /// @notice stored commission
     uint256 public commissionAccumulator;
 
     struct StakeInfo {
@@ -49,6 +69,7 @@ contract CarpeDiem is ReentrancyGuard {
         uint256 assignedReward;
     }
 
+    /// @notice stakes in pool
     mapping(address => StakeInfo[]) public stakes; // user address => StakeInfo
 
     event Deposit(address indexed depositor, uint256 id, uint256 amount, uint32 duration);
@@ -77,6 +98,10 @@ contract CarpeDiem is ReentrancyGuard {
     event NewPrice(uint256 oldPrice, uint256 newPrice);
     event SharesChanged(uint256 oldShares, uint256 newShares);
 
+    /// @param _token token for pool
+    /// @param _params parameters of the pool - price, bBonusAmount, lBonusPeriod, bBonusMaxPercent, lBonusMaxPercent
+    /// @param _distributionPercents Commissions
+    /// @param _distributionAddresses Commission recievers
     constructor(
         address _token,
         uint256[5] memory _params,
@@ -98,10 +123,16 @@ contract CarpeDiem is ReentrancyGuard {
         distributionAddresses = _distributionAddresses;
     }
 
+    /// @notice How many stakes were created by staker
+    /// @param _staker staker
+    /// @return Stakes by staker
     function getStakesLength(address _staker) external view returns (uint256) {
         return stakes[_staker].length;
     }
 
+    /// @notice Create a new stake
+    /// @param _amount The amount of deposit
+    /// @param _duration The duration of deposit
     function deposit(uint256 _amount, uint32 _duration) external nonReentrant {
         require(_amount > 0, "deposit cannot be zero");
         require(_duration > 0, "duration cannot be zero");
@@ -128,6 +159,9 @@ contract CarpeDiem is ReentrancyGuard {
         emit Deposit(msg.sender, stakes[msg.sender].length - 1, _amount, _duration);
     }
 
+    /// @notice Upgrade existing stake
+    /// @param _stakeId Id of the stake to upgrade
+    /// @param _amount The amount to add
     function upgradeStake(uint256 _stakeId, uint256 _amount) external nonReentrant {
         require(_amount > 0, "deposit cannot be zero");
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
@@ -173,6 +207,8 @@ contract CarpeDiem is ReentrancyGuard {
         );
     }
 
+    /// @notice Remove stake, claim the money
+    /// @param _stakeId Id of the stake to withdraw
     function withdraw(uint256 _stakeId) external {
         require(_stakeId < stakes[msg.sender].length, "no such stake id");
         StakeInfo memory stakeInfo = stakes[msg.sender][_stakeId];
@@ -203,6 +239,9 @@ contract CarpeDiem is ReentrancyGuard {
         emit Withdraw(msg.sender, _stakeId, stakeInfo.amount, reward, penalty);
     }
 
+    /// @notice Remove overdue stake
+    /// @param _user Whose stake it is
+    /// @param _stakeId Id of the stake to remove
     function removeDeadStake(address _user, uint256 _stakeId) external {
         require(_stakeId < stakes[_user].length, "noSuchStake");
         StakeInfo memory stakeInfo = stakes[_user][_stakeId];
@@ -242,6 +281,7 @@ contract CarpeDiem is ReentrancyGuard {
         emit StakeRemoved(_user, _stakeId, stakeInfo.amount);
     }
 
+    /// @notice Commission distribution
     function distributePenalty() external nonReentrant {
         address[3] memory addresses = distributionAddresses;
         uint16[3] memory poolPercents = distributionPercents;
@@ -265,6 +305,9 @@ contract CarpeDiem is ReentrancyGuard {
         commissionAccumulator = 0;
     }
 
+    /// @notice Calculate current penalty for the stake
+    /// @param _user Whose stake it is
+    /// @param _stakeId Id of the stake
     function getPenalty(address _user, uint256 _stakeId)
         external
         view
@@ -274,6 +317,9 @@ contract CarpeDiem is ReentrancyGuard {
         return _getPenalty(_user, reward, _stakeId);
     }
 
+    /// @notice Calculate current reward for the stake
+    /// @param _user Whose stake it is
+    /// @param _stakeId Id of the stake
     function getReward(address _user, uint256 _stakeId)
         public
         view
