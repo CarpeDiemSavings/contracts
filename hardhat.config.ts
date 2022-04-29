@@ -16,28 +16,22 @@ export default {
         hardhat: {
             allowUnlimitedContractSize: false,
         },
-        mainnet: {
-            url: `https://mainnet.infura.io/v3/${process.env.INFURA_ID}`,
-            chainId: 1,
-            gasPrice: 100000000000,
+        binancetest: {
+            url: "https://data-seed-prebsc-1-s1.binance.org:8545",
+            chainId: 97,
+            gasPrice: 20000000000,
             accounts: {mnemonic: mnemonic}
-        },
-        rinkeby: {
-            url: `https://rinkeby.infura.io/v3/${process.env.INFURA_ID}`,
-            chainId: 4,
-            gasPrice: 7000000000,
-            accounts: {mnemonic: mnemonic}
-        },
+          },
     },
     etherscan: {
-        apiKey: process.env.ETHERSCAN_API_KEY,
+        apiKey: process.env.BSC_API_KEY,
     },
     solidity: {
         version: '0.8.13',
         settings: {
             optimizer: {
                 enabled: true,
-                runs: 999999,
+                runs: 200,
             },
             metadata: {
                 // do not include the metadata hash, since this is machine dependent
